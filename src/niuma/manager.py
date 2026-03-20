@@ -97,9 +97,17 @@ class ManagerDecision:
         outer = json.loads(raw_output)
 
         inner = outer.get("structured_output")
-        if inner is None:
-            result_str = outer.get("result", "{}")
-            inner = json.loads(result_str) if isinstance(result_str, str) and result_str else {}
+        if not isinstance(inner, dict):
+            # Fallback: try parsing result as JSON
+            result_str = outer.get("result", "")
+            if isinstance(result_str, str) and result_str.strip().startswith("{"):
+                try:
+                    inner = json.loads(result_str)
+                except json.JSONDecodeError:
+                    inner = {}
+            else:
+                # Manager returned plain text — treat as reply
+                inner = {"action": "reply", "reply_text": str(result_str or inner or "")}
 
         return cls(
             action=inner.get("action", "reply"),
