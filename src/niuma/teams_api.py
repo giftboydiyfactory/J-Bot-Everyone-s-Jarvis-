@@ -17,7 +17,12 @@ _TOKEN_CACHE = Path.home() / ".ai-pim-utils" / "token-cache-ai-pim-utils"
 
 
 def _get_access_token() -> str:
-    """Read a valid access token from the shared ai-pim-utils token cache."""
+    """Read a valid access token from the shared ai-pim-utils token cache.
+
+    If no valid (non-expired) access token is found, attempts to use a refresh
+    token from the cache to obtain a new access token via the OAuth token endpoint.
+    If refresh fails, logs a clear error directing the user to re-authenticate.
+    """
     if not _TOKEN_CACHE.exists():
         raise RuntimeError("Token cache not found. Run 'teams-cli auth login' first.")
 
@@ -25,11 +30,77 @@ def _get_access_token() -> str:
         data = json.load(f)
 
     now = int(time.time())
+    # First pass: look for a valid (non-expired) access token
     for _key, token_entry in data.get("AccessToken", {}).items():
         if int(token_entry.get("expires_on", 0)) > now:
             return token_entry["secret"]
 
-    raise RuntimeError("No valid access token found. Run 'teams-cli auth login' to refresh.")
+    # No valid access token found — try to refresh using a refresh token
+    logger.warning("Access token expired. Attempting to refresh using refresh token...")
+    refresh_token = None
+    client_id = None
+    tenant_id = None
+
+    for _key, rt_entry in data.get("RefreshToken", {}).items():
+        rt = rt_entry.get("secret")
+        if rt:
+            refresh_token = rt
+            client_id = rt_entry.get("client_id") or rt_entry.get("clientId")
+            break
+
+    # Try to get tenant from Account or token entry metadata
+    for _key, acct in data.get("Account", {}).items():
+        realm = acct.get("realm")
+        if realm and realm != "common":
+            tenant_id = realm
+            break
+
+    if not refresh_token:
+        logger.error(
+            "No refresh token found in cache. Run 'teams-cli auth login' to re-authenticate."
+        )
+        raise RuntimeError(
+            "Access token expired and no refresh token available. "
+            "Run 'teams-cli auth login' to re-authenticate."
+        )
+
+    if not client_id or not tenant_id:
+        logger.error(
+            "Cannot refresh token: missing client_id or tenant_id in cache. "
+            "Run 'teams-cli auth login' to re-authenticate."
+        )
+        raise RuntimeError(
+            "Access token expired. Could not find client_id/tenant_id for refresh. "
+            "Run 'teams-cli auth login' to re-authenticate."
+        )
+
+    try:
+        import urllib.parse
+        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+        post_data = urllib.parse.urlencode({
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+            "scope": "https://graph.microsoft.com/.default offline_access",
+        }).encode()
+
+        req = urllib.request.Request(token_url, data=post_data, method="POST")
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+        resp = urllib.request.urlopen(req, timeout=15)
+        token_response = json.loads(resp.read())
+        new_access_token = token_response.get("access_token")
+        if not new_access_token:
+            raise RuntimeError("Token refresh response missing access_token")
+        logger.info("Successfully refreshed access token via refresh token.")
+        return new_access_token
+    except Exception as exc:
+        logger.error(
+            "Token refresh failed: %s. Run 'teams-cli auth login' to re-authenticate.", exc
+        )
+        raise RuntimeError(
+            f"Access token expired and refresh failed: {exc}. "
+            "Run 'teams-cli auth login' to re-authenticate."
+        ) from exc
 
 
 def _graph_post_sync(endpoint: str, body: dict[str, Any]) -> dict[str, Any]:

@@ -209,15 +209,23 @@ class NiumaBot:
         if not messages:
             return
 
-        last_seen = await self._db.get_poll_state(chat_id)
-        triggered = self._poller.filter_triggered(messages)
-        new_messages = self._poller.filter_new(triggered, last_seen)
-
         # Find the newest message ID (messages may be newest-first from API)
         try:
             newest_id = max(messages, key=lambda m: int(m.id)).id
         except ValueError:
             newest_id = messages[0].id
+
+        last_seen = await self._db.get_poll_state(chat_id)
+
+        # Issue 2: On first startup (no poll_state), skip all existing messages
+        # by marking the newest as already seen — only process future messages.
+        if last_seen is None:
+            await self._db.set_poll_state(chat_id, newest_id)
+            logger.info("First poll of chat %s: skipping existing messages, last_seen=%s", chat_id[:20], newest_id)
+            return
+
+        triggered = self._poller.filter_triggered(messages)
+        new_messages = self._poller.filter_new(triggered, last_seen)
 
         if not new_messages:
             await self._db.set_poll_state(chat_id, newest_id)
@@ -252,12 +260,18 @@ class NiumaBot:
         if not messages:
             return
 
-        last_seen = await self._db.get_poll_state(chat_id)
-
         try:
             newest_id = max(messages, key=lambda m: int(m.id)).id
         except ValueError:
             newest_id = messages[0].id
+
+        last_seen = await self._db.get_poll_state(chat_id)
+
+        # Issue 2: On first startup (no poll_state), skip all existing messages.
+        if last_seen is None:
+            await self._db.set_poll_state(chat_id, newest_id)
+            logger.info("First poll of session chat %s: skipping existing messages", chat_id[:20])
+            return
 
         # Filter new messages (no trigger needed in session chats)
         new_messages = self._poller.filter_new(messages, last_seen)
@@ -275,7 +289,8 @@ class NiumaBot:
             if not self._is_allowed(msg.sender_email):
                 continue
 
-            # Skip bot's own messages (contain the signature)
+            # Issue 4: Skip bot's own messages (check both raw body and signature).
+            # parse_messages already strips HTML, so the check on msg.body is correct.
             if "Sent via Claude Code" in msg.body:
                 continue
 
@@ -311,11 +326,18 @@ class NiumaBot:
         if not messages:
             return
 
-        last_seen = await self._db.get_poll_state(chat_id)
         try:
             newest_id = max(messages, key=lambda m: int(m.id)).id
         except ValueError:
             newest_id = messages[0].id
+
+        last_seen = await self._db.get_poll_state(chat_id)
+
+        # Issue 2: On first startup (no poll_state), skip all existing messages.
+        if last_seen is None:
+            await self._db.set_poll_state(chat_id, newest_id)
+            logger.info("First poll of manager chat %s: skipping existing messages", chat_id[:20])
+            return
 
         new_messages = self._poller.filter_new(messages, last_seen)
         if not new_messages:
