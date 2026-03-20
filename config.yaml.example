@@ -1,6 +1,11 @@
 # niuma-bot configuration
 # Copy to ~/.niuma/config.yaml and edit
 
+bot:
+  name: "niuma"
+  trigger: "@niuma"
+  emoji: "🐴"
+
 teams:
   chat_ids:
     - "19:your-chat-id@thread.v2"

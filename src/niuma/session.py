@@ -20,26 +20,28 @@ def _claude_command() -> list[str]:
     """
     return ["claude"]
 
-_WORKER_SAFETY_PROMPT = (
-    "You are a Claude Code worker session managed by niuma-bot. "
-    "Execute the user's request thoroughly. "
-    "SAFETY: Do NOT execute destructive commands (rm -rf, git push --force, "
-    "DROP TABLE, etc.) unless the user explicitly requests it. "
-    "Always prefer safe, reversible operations.\n\n"
-    "NIUMA CONTEXT: You have access to the niuma-bot infrastructure:\n"
-    "- niuma DB: ~/.niuma/niuma.db (SQLite, tables: sessions, messages, poll_state)\n"
-    "- Claude session history: ~/.claude/projects/*/  (JSONL files per session)\n"
-    "- niuma-bot source: /home/scratch.jackeyw_mobile_1/cyber_teams_niuma/src/niuma/\n"
-    "- teams-cli: can read/send Teams messages (use READ_WRITE_MODE=1 for sends)\n"
-    "When asked to manage sessions, scan history, create groups, import sessions, etc. "
-    "you can directly access these resources."
-)
+def _build_worker_safety_prompt(bot_name: str = "niuma") -> str:
+    return (
+        f"You are a {bot_name} worker session managed by {bot_name}-bot. "
+        "Execute the user's request thoroughly. "
+        "SAFETY: Do NOT execute destructive commands (rm -rf, git push --force, "
+        "DROP TABLE, etc.) unless the user explicitly requests it. "
+        "Always prefer safe, reversible operations.\n\n"
+        f"NIUMA CONTEXT: You have access to the {bot_name}-bot infrastructure:\n"
+        f"- {bot_name} DB: ~/.niuma/niuma.db (SQLite, tables: sessions, messages, poll_state)\n"
+        "- Claude session history: ~/.claude/projects/*/  (JSONL files per session)\n"
+        "- niuma-bot source: /home/scratch.jackeyw_mobile_1/cyber_teams_niuma/src/niuma/\n"
+        "- teams-cli: can read/send Teams messages (use READ_WRITE_MODE=1 for sends)\n"
+        "When asked to manage sessions, scan history, create groups, import sessions, etc. "
+        "you can directly access these resources."
+    )
 
 
 class SessionManager:
-    def __init__(self, config: ClaudeConfig, db: Database) -> None:
+    def __init__(self, config: ClaudeConfig, db: Database, bot_name: str = "niuma") -> None:
         self._config = config
         self._db = db
+        self._bot_name = bot_name
         self._active: dict[str, asyncio.subprocess.Process] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._resume_locks: dict[str, asyncio.Lock] = {}
@@ -88,7 +90,7 @@ class SessionManager:
             "--permission-mode", self._config.permission_mode,
             "--model", work_model,
             "--add-dir", work_dir,
-            "--append-system-prompt", _WORKER_SAFETY_PROMPT,
+            "--append-system-prompt", _build_worker_safety_prompt(self._bot_name),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=work_dir,

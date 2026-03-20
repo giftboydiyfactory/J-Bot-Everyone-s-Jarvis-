@@ -45,6 +45,13 @@ CREATE TABLE IF NOT EXISTS bot_state (
     value           TEXT,
     updated_at      REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS watched_chats (
+    chat_id         TEXT PRIMARY KEY,
+    mode            TEXT NOT NULL DEFAULT 'full',
+    added_by        TEXT NOT NULL,
+    added_at        REAL NOT NULL
+);
 """
 
 
@@ -102,6 +109,8 @@ class Database:
         migrations = [
             # Add bot_state table (already in _SCHEMA but guard for very old DBs)
             "CREATE TABLE IF NOT EXISTS bot_state (key TEXT PRIMARY KEY, value TEXT, updated_at REAL NOT NULL)",
+            # Add watched_chats table
+            "CREATE TABLE IF NOT EXISTS watched_chats (chat_id TEXT PRIMARY KEY, mode TEXT NOT NULL DEFAULT 'full', added_by TEXT NOT NULL, added_at REAL NOT NULL)",
         ]
         for stmt in migrations:
             try:
@@ -324,6 +333,31 @@ class Database:
         )
         row = await cursor.fetchone()
         return float(row["total"]) if row else 0.0
+
+    async def add_watched_chat(self, chat_id: str, added_by: str, mode: str = "full") -> None:
+        """Add a chat to the watched_chats table (or update its mode if already present)."""
+        now = time.time()
+        await self._conn.execute(
+            """INSERT INTO watched_chats (chat_id, mode, added_by, added_at)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(chat_id) DO UPDATE SET mode=?, added_by=?, added_at=?""",
+            (chat_id, mode, added_by, now, mode, added_by, now),
+        )
+        await self._conn.commit()
+
+    async def remove_watched_chat(self, chat_id: str) -> None:
+        """Remove a chat from the watched_chats table."""
+        await self._conn.execute(
+            "DELETE FROM watched_chats WHERE chat_id = ?", (chat_id,)
+        )
+        await self._conn.commit()
+
+    async def list_watched_chats(self) -> list[dict[str, Any]]:
+        """Return all watched chats."""
+        cursor = await self._conn.execute(
+            "SELECT chat_id, mode, added_by, added_at FROM watched_chats ORDER BY added_at"
+        )
+        return [dict(r) for r in await cursor.fetchall()]
 
     async def _get_row(self, row_id: str) -> Optional[aiosqlite.Row]:
         cursor = await self._conn.execute(

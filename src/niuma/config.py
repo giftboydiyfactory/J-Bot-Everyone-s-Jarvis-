@@ -12,6 +12,13 @@ class ConfigError(Exception):
 
 
 @dataclass(frozen=True)
+class BotConfig:
+    name: str
+    trigger: str
+    emoji: str
+
+
+@dataclass(frozen=True)
 class TeamsConfig:
     chat_ids: list[str]
     trigger: str
@@ -54,6 +61,7 @@ class NiumaConfig:
     security: SecurityConfig
     storage: StorageConfig
     logging: LoggingConfig
+    bot: BotConfig
 
 
 def _expand_path(p: str) -> str:
@@ -82,6 +90,7 @@ def load_config(path: Path) -> NiumaConfig:
     security_raw = _require(raw, "security", "root")
     storage_raw = _require(raw, "storage", "root")
     logging_raw = _require(raw, "logging", "root")
+    bot_raw = raw.get("bot", {})
 
     poll_interval = teams_raw.get("poll_interval", 60)
     if poll_interval < 5:
@@ -95,10 +104,22 @@ def load_config(path: Path) -> NiumaConfig:
     if session_timeout < 60:
         raise ConfigError("claude.session_timeout must be >= 60 seconds")
 
+    bot_name = bot_raw.get("name", "niuma")
+    bot_trigger = bot_raw.get("trigger", f"@{bot_name}")
+    bot_emoji = bot_raw.get("emoji", "🐴")
+
+    # teams.trigger defaults to bot.trigger if not explicitly set
+    teams_trigger = teams_raw.get("trigger", bot_trigger)
+
     return NiumaConfig(
+        bot=BotConfig(
+            name=bot_name,
+            trigger=bot_trigger,
+            emoji=bot_emoji,
+        ),
         teams=TeamsConfig(
             chat_ids=_require(teams_raw, "chat_ids", "teams"),
-            trigger=teams_raw.get("trigger", "@niuma"),
+            trigger=teams_trigger,
             poll_interval=poll_interval,
             reply_only_chat_ids=teams_raw.get("reply_only_chat_ids", []),
             auto_session_chats=teams_raw.get("auto_session_chats", True),

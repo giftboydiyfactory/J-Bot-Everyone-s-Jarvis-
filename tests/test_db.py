@@ -127,3 +127,51 @@ async def test_get_total_cost_usd(db: Database) -> None:
 async def test_init_creates_bot_state_table(db: Database) -> None:
     tables = await db.list_tables()
     assert "bot_state" in tables
+
+
+@pytest.mark.asyncio
+async def test_init_creates_watched_chats_table(db: Database) -> None:
+    tables = await db.list_tables()
+    assert "watched_chats" in tables
+
+
+@pytest.mark.asyncio
+async def test_add_and_list_watched_chats(db: Database) -> None:
+    chats = await db.list_watched_chats()
+    assert chats == []
+
+    await db.add_watched_chat("chat-1", added_by="admin@nvidia.com", mode="full")
+    await db.add_watched_chat("chat-2", added_by="admin@nvidia.com", mode="reply_only")
+
+    chats = await db.list_watched_chats()
+    assert len(chats) == 2
+    chat_ids = {c["chat_id"] for c in chats}
+    assert "chat-1" in chat_ids
+    assert "chat-2" in chat_ids
+
+    modes = {c["chat_id"]: c["mode"] for c in chats}
+    assert modes["chat-1"] == "full"
+    assert modes["chat-2"] == "reply_only"
+
+
+@pytest.mark.asyncio
+async def test_remove_watched_chat(db: Database) -> None:
+    await db.add_watched_chat("chat-1", added_by="admin@nvidia.com")
+    await db.add_watched_chat("chat-2", added_by="admin@nvidia.com")
+
+    await db.remove_watched_chat("chat-1")
+    chats = await db.list_watched_chats()
+    assert len(chats) == 1
+    assert chats[0]["chat_id"] == "chat-2"
+
+
+@pytest.mark.asyncio
+async def test_add_watched_chat_updates_mode(db: Database) -> None:
+    """Re-adding an existing chat updates its mode."""
+    await db.add_watched_chat("chat-1", added_by="admin@nvidia.com", mode="full")
+    await db.add_watched_chat("chat-1", added_by="admin2@nvidia.com", mode="reply_only")
+
+    chats = await db.list_watched_chats()
+    assert len(chats) == 1
+    assert chats[0]["mode"] == "reply_only"
+    assert chats[0]["added_by"] == "admin2@nvidia.com"
