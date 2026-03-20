@@ -27,11 +27,12 @@ def _teams_read_output(messages: list[dict]) -> bytes:
     }).encode()
 
 
-def _claude_dispatcher_output(action: str, **kwargs) -> bytes:
+def _claude_manager_output(action: str, **kwargs) -> bytes:
     inner = {"action": action, **kwargs}
     return json.dumps({
-        "result": json.dumps(inner),
-        "session_id": "disp-uuid",
+        "result": "",
+        "structured_output": inner,
+        "session_id": "manager-uuid",
         "total_cost_usd": 0.01,
     }).encode()
 
@@ -59,12 +60,12 @@ async def test_full_flow_new_session(bot: NiumaBot) -> None:
     ))
     teams_read_mock.returncode = 0
 
-    dispatcher_mock = AsyncMock()
-    dispatcher_mock.communicate = AsyncMock(return_value=(
-        _claude_dispatcher_output("new", prompt="analyze this repo", cwd="/tmp"),
+    manager_mock = AsyncMock()
+    manager_mock.communicate = AsyncMock(return_value=(
+        _claude_manager_output("new", prompt="analyze this repo", cwd="/tmp"),
         b"",
     ))
-    dispatcher_mock.returncode = 0
+    manager_mock.returncode = 0
 
     worker_mock = AsyncMock()
     worker_mock.communicate = AsyncMock(return_value=(
@@ -87,8 +88,8 @@ async def test_full_flow_new_session(bot: NiumaBot) -> None:
             else:
                 return teams_send_mock
         elif cmd == "claude":
-            if "--no-session-persistence" in args:
-                return dispatcher_mock
+            if "--json-schema" in args:
+                return manager_mock
             else:
                 return worker_mock
         return teams_read_mock

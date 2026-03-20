@@ -11,7 +11,7 @@ from typing import Optional
 
 from niuma.config import NiumaConfig, load_config, ConfigError
 from niuma.db import Database
-from niuma.dispatcher import Dispatcher, DispatchResult
+from niuma.manager import Manager, ManagerDecision
 from niuma.poller import Poller
 from niuma.teams_api import create_session_chat_async as create_session_chat
 from niuma.responder import Responder
@@ -27,7 +27,7 @@ class NiumaBot:
         self._config = config
         self._db: Optional[Database] = None
         self._poller: Optional[Poller] = None
-        self._dispatcher: Optional[Dispatcher] = None
+        self._manager: Optional[Manager] = None
         self._session_mgr: Optional[SessionManager] = None
         self._responder: Optional[Responder] = None
         self._running = False
@@ -45,7 +45,7 @@ class NiumaBot:
         self._db = Database(self._config.storage.db_path)
         await self._db.init()
         self._poller = Poller(self._config.teams)
-        self._dispatcher = Dispatcher(self._config.claude)
+        self._manager = Manager(self._config.claude)
         self._session_mgr = SessionManager(self._config.claude, self._db)
         self._responder = Responder()
 
@@ -208,65 +208,60 @@ class NiumaBot:
         self, chat_id: str, user_email: str, prompt: str,
         message_id: str = "",
     ) -> None:
-        """Dispatch a single user message through the Claude dispatcher.
+        """Route user message through the stateful Manager session.
 
-        The dispatcher only decides: new, resume, or reply.
-        All complex operations (list, scan, import, stop, etc.) are handled
-        by worker sessions — not hardcoded in Python.
+        The Manager remembers all context and decides: new, resume, reply, or report.
         """
         reply_only = self._is_reply_only(chat_id)
         rt = message_id
 
         try:
-            sessions = await self._session_mgr.list_active()
-            dispatch = await self._dispatcher.dispatch(
-                user_prompt=prompt,
+            decision = await self._manager.decide(
+                user_message=prompt,
                 user_email=user_email,
-                sessions=sessions,
-                reply_only=reply_only,
             )
         except Exception:
-            logger.exception("Dispatcher failed for message from %s", user_email)
+            logger.exception("Manager failed for message from %s", user_email)
             return
 
-        logger.info("Dispatch: action=%s for user=%s", dispatch.action, user_email)
+        logger.info("Manager: action=%s for user=%s", decision.action, user_email)
 
         # Enforce reply-only mode
-        if reply_only and dispatch.action != "reply":
+        if reply_only and decision.action not in ("reply", "report"):
             await self._responder.send_text(
                 chat_id,
-                dispatch.reply_text or "This chat is in reply-only mode.",
+                decision.reply_text or "This chat is in reply-only mode.",
                 reply_to=rt,
             )
             return
 
-        if dispatch.action == "new":
-            await self._handle_new(chat_id, user_email, dispatch, rt)
-        elif dispatch.action == "resume":
-            await self._handle_resume(chat_id, dispatch, rt, user_email=user_email)
-        elif dispatch.action == "reply":
-            await self._responder.send_text(chat_id, dispatch.reply_text or "", reply_to=rt)
+        if decision.action == "new":
+            await self._handle_new(chat_id, user_email, decision, rt)
+        elif decision.action == "resume":
+            await self._handle_resume(chat_id, decision, rt, user_email=user_email)
+        elif decision.action in ("reply", "report"):
+            await self._responder.send_text(chat_id, decision.reply_text or "", reply_to=rt)
 
     async def _handle_new(
-        self, chat_id: str, user_email: str, dispatch: DispatchResult,
+        self, chat_id: str, user_email: str, decision: ManagerDecision,
         reply_to: str = "",
     ) -> None:
         try:
             session = await self._session_mgr.start_session(
                 chat_id=chat_id,
                 created_by=user_email,
-                prompt=dispatch.prompt or "",
-                cwd=dispatch.cwd,
-                model=dispatch.model,
+                prompt=decision.prompt or "",
+                cwd=decision.cwd,
+                model=None,
                 trigger_message_id=reply_to,
             )
             sid = session["id"]
             session_chat_id = None
 
             # Only create dedicated chat for complex tasks
-            if dispatch.dedicated_chat:
+            if decision.dedicated_chat:
                 try:
-                    prompt_preview = (dispatch.prompt or "")[:50]
+                    prompt_preview = (decision.prompt or "")[:50]
                     chat_info = await create_session_chat(
                         session_id=sid,
                         topic=prompt_preview,
@@ -298,10 +293,10 @@ class NiumaBot:
             await self._responder.send_text(chat_id, str(e), reply_to=reply_to)
 
     async def _handle_resume(
-        self, chat_id: str, dispatch: DispatchResult,
+        self, chat_id: str, decision: ManagerDecision,
         reply_to: str = "", user_email: str = "",
     ) -> None:
-        sid = dispatch.session_id
+        sid = decision.session_id
         if not sid:
             await self._responder.send_text(chat_id, "No session ID to resume.", reply_to=reply_to)
             return
@@ -333,7 +328,7 @@ class NiumaBot:
 
         try:
             await self._session_mgr.resume_session(
-                session_id=actual_sid, prompt=dispatch.prompt or ""
+                session_id=actual_sid, prompt=decision.prompt or ""
             )
             if session_chat_id:
                 await self._responder.send_text(
@@ -360,24 +355,39 @@ class NiumaBot:
                 return
             status = session["status"]
             if status in ("completed", "failed", "timeout"):
-                if status == "completed":
+                result_text = session.get("last_output", "")
+                error_text = None
+                if status == "timeout":
+                    error_text = "Session timed out (24h)"
+                elif status == "failed":
+                    error_text = result_text or "Unknown error"
+                    result_text = None
+
+                # Send result to Teams
+                if error_text:
                     await self._responder.send_result(
-                        chat_id, session_id,
-                        result=session.get("last_output"),
-                        reply_to=reply_to,
-                    )
-                elif status == "timeout":
-                    await self._responder.send_result(
-                        chat_id, session_id,
-                        error="Session timed out (24h)",
-                        reply_to=reply_to,
+                        chat_id, session_id, error=error_text, reply_to=reply_to,
                     )
                 else:
                     await self._responder.send_result(
-                        chat_id, session_id,
-                        error=session.get("last_output", "Unknown error"),
-                        reply_to=reply_to,
+                        chat_id, session_id, result=result_text, reply_to=reply_to,
                     )
+
+                # Feed result back to Manager so it remembers
+                try:
+                    mgr_decision = await self._manager.feed_worker_result(
+                        session_id=session_id,
+                        result=result_text or error_text or "",
+                        status=status,
+                    )
+                    # If Manager wants to report something, send it
+                    if mgr_decision.action == "report" and mgr_decision.reply_text:
+                        await self._responder.send_text(
+                            chat_id, mgr_decision.reply_text, reply_to=reply_to,
+                        )
+                except Exception:
+                    logger.debug("Failed to feed worker result to Manager", exc_info=True)
+
                 return
 
     def _is_allowed(self, email: str) -> bool:
