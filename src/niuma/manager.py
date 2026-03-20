@@ -13,9 +13,12 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from niuma.config import ClaudeConfig
+
+if TYPE_CHECKING:
+    from niuma.db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -119,17 +122,34 @@ class ManagerDecision:
         )
 
 
+_BOT_STATE_MANAGER_SESSION = "manager_session_id"
+
+
 class Manager:
     """Stateful Manager that persists across interactions via --resume."""
 
-    def __init__(self, config: ClaudeConfig) -> None:
+    def __init__(self, config: ClaudeConfig, db: Optional["Database"] = None) -> None:
         self._config = config
+        self._db = db
         self._session_id: Optional[str] = None
         self._initialized = False
 
     @property
     def session_id(self) -> Optional[str]:
         return self._session_id
+
+    async def load_state(self) -> None:
+        """Load persisted manager session_id from DB on startup."""
+        if self._db is None:
+            return
+        try:
+            saved = await self._db.get_bot_state(_BOT_STATE_MANAGER_SESSION)
+            if saved:
+                self._session_id = saved
+                self._initialized = True
+                logger.info("Resumed Manager session from DB: %s", saved[:12])
+        except Exception:
+            logger.warning("Could not load manager session from DB", exc_info=True)
 
     async def decide(
         self,
@@ -181,11 +201,16 @@ class Manager:
         raw = stdout.decode()
         outer = json.loads(raw)
 
-        # Save session ID for future resume
+        # Save session ID for future resume (including across restarts)
         new_sid = outer.get("session_id")
-        if new_sid:
+        if new_sid and new_sid != self._session_id:
             self._session_id = new_sid
             self._initialized = True
+            if self._db is not None:
+                try:
+                    await self._db.set_bot_state(_BOT_STATE_MANAGER_SESSION, new_sid)
+                except Exception:
+                    logger.warning("Failed to persist manager session_id to DB", exc_info=True)
 
         return ManagerDecision.from_claude_output(raw)
 
@@ -199,16 +224,23 @@ class Manager:
         """Feed a worker's result back to the Manager for processing.
 
         The Manager can then decide to report to user, assign follow-up, etc.
+        Errors are caught and logged so callers (the watch loop) remain unaffected.
         """
         context = (
             f"[WORKER RESULT] Session [{session_id}] finished with status={status}.\n"
             f"Output:\n{result[:3000]}"
         )
-        return await self.decide(
-            user_message="",
-            user_email="system",
-            context=context,
-        )
+        try:
+            return await self.decide(
+                user_message="",
+                user_email="system",
+                context=context,
+            )
+        except Exception:
+            logger.exception(
+                "feed_worker_result failed for session %s — returning no-op reply", session_id
+            )
+            return ManagerDecision(action="reply", reply_text="")
 
     def _build_prompt(
         self, user_message: str, user_email: str, context: str

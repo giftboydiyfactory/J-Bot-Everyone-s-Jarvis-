@@ -1,26 +1,62 @@
 # niuma-bot
 
-A Teams chat bot powered by Claude Code that monitors group chats for `@niuma` messages and dispatches them to Claude for execution.
+A Teams chat bot powered by Claude Code that monitors group chats for `@niuma` messages and routes them through a stateful **Manager** session that orchestrates Claude Code worker sessions.
+
+<!-- TODO (web-dashboard): A web dashboard for session monitoring is planned.
+     It will provide real-time status, cost summaries, and worker logs via HTTP. -->
 
 ## Overview
 
 niuma-bot integrates Microsoft Teams with Claude Code to enable AI-powered task execution directly from Teams chat. When a user mentions `@niuma` in a Teams chat, the bot:
 
 1. **Polls** Teams for new messages containing the trigger
-2. **Dispatches** the message to Claude for intent classification and processing
-3. **Executes** the requested task via Claude Code worker sessions
+2. **Routes** the message to the stateful Manager Claude session
+3. **Executes** tasks via Claude Code worker sessions managed by the Manager
 4. **Replies** with results back to Teams
 
 This is an internal NVIDIA tool for engineering teams who need Claude Code execution capabilities within their Teams workflows.
 
-## How It Works
+## Architecture
 
-The bot operates in a continuous cycle:
+### Manager Session
 
-- **Poll**: Every N seconds, query Teams chat history for messages containing `@niuma`
-- **Dispatch**: Send triggering message to Claude for analysis; determine if user wants a new session, resume existing, or get information
-- **Worker**: Launch Claude Code session with appropriate model and working directory if needed
-- **Reply**: Stream results back to Teams or provide session status/links
+The bot uses a **persistent Manager session** (a long-lived Claude Code session) as the single routing brain:
+
+- The Manager remembers all previous conversations, worker assignments, and results across restarts
+- The Manager's `session_id` and dedicated chat ID are saved to the SQLite DB so bot restarts resume the same Manager instance
+- All user messages from configured trigger chats flow through the Manager
+- The Manager decides: answer directly (`reply`), start a new worker (`new`), resume existing worker (`resume`), or proactively report status (`report`)
+
+### Dedicated Manager Chat
+
+On first start, the bot creates a dedicated Teams chat for the Manager. All routing decisions and worker results are visible there. On restart, the same chat is reused (persisted in DB).
+
+### Worker Sessions
+
+Workers are Claude Code sessions spawned by the Manager's instructions:
+
+- Each worker gets a `session_id` (format: `MMDD-XXXX`, e.g. `0320-a7f3`)
+- Workers have access to the file system, shell commands, and Teams via `teams-cli`
+- Complex tasks can get a dedicated Teams chat for their output
+- Worker results are fed back to the Manager for context tracking
+
+### Module Layout
+
+```
+src/niuma/
+  main.py       — CLI entry point and NiumaBot lifecycle (coordinator)
+  handler.py    — Inbound message routing and dispatch logic
+  watcher.py    — Session watching: polls DB until worker finishes, sends result
+  manager.py    — Stateful Manager session (the team lead)
+  session.py    — Claude Code worker session management
+  poller.py     — Teams chat polling and message parsing
+  responder.py  — Sending messages back to Teams
+  db.py         — SQLite database (sessions, messages, poll_state, bot_state)
+  config.py     — Configuration loading and validation
+  scanner.py    — Scan ~/.claude/projects/ to discover Claude sessions
+  teams_api.py  — Teams API helpers (create chat, etc.)
+  dispatcher.py — Legacy stateless dispatcher (kept for reference)
+```
 
 ## Prerequisites
 
@@ -39,8 +75,6 @@ git clone <repository-url>
 cd cyber_teams_niuma
 pip install -e ".[dev]"
 ```
-
-This installs niuma-bot with all development dependencies for testing.
 
 ## Configuration
 
@@ -70,7 +104,7 @@ Open `~/.niuma/config.yaml` and update:
 - **teams.chat_ids**: Add your chat IDs from the list above
 - **security.allowed_users**: Add email addresses of users who can trigger the bot
 - **security.admin_users**: Add email addresses of admin users (can list all sessions, stop others)
-- **claude.dispatcher_model**: Model for intent classification (default: `sonnet`)
+- **claude.dispatcher_model**: Model for the Manager session (default: `sonnet`)
 - **claude.worker_model**: Model for executing tasks (default: `sonnet`)
 - **storage.db_path**: Path to SQLite database (default: `~/.niuma/niuma.db`)
 
@@ -126,20 +160,53 @@ Specify a non-default config file:
 niuma -c /path/to/config.yaml
 ```
 
+## Persistence Across Restarts
+
+The SQLite database at `~/.niuma/niuma.db` is **persistent** — do not delete it between restarts. It stores:
+
+- All session history and results
+- The Manager's Claude `session_id` (resumed on restart)
+- The Manager's dedicated Teams chat ID (reused on restart)
+- Poll state (last-seen message IDs per chat — new messages only, no duplicates)
+- Total cost tracking across all sessions
+
+To check accumulated cost:
+
+```python
+from niuma.db import Database
+import asyncio
+
+async def show_cost():
+    db = Database("~/.niuma/niuma.db")
+    await db.init()
+    total = await db.get_total_cost_usd()
+    print(f"Total cost: ${total:.4f}")
+    await db.close()
+
+asyncio.run(show_cost())
+```
+
+## Graceful Shutdown
+
+On `SIGTERM` or `SIGINT`, the bot:
+
+1. Stops accepting new poll cycles
+2. Notifies the Manager chat that shutdown is in progress
+3. Waits up to 30 seconds for running worker watchers to finish
+4. Cancels any remaining tasks and closes the DB connection cleanly
+
 ## Usage in Teams
 
-Once running, use the bot in Teams by mentioning `@niuma` followed by your request. The bot supports the following commands:
+Once running, use the bot in Teams by mentioning `@niuma` followed by your request:
 
 | Command | Example | Behavior |
 |---------|---------|----------|
-| **New Session** | `@niuma create a Python script that prints "hello world"` | Starts a new Claude Code session with your request |
-| **Resume Session** | `@niuma continue <session-id>` | Resumes a previous session with a new prompt |
-| **List Sessions** | `@niuma list` | Shows active sessions (admins see all, others see only theirs) |
-| **Session Status** | `@niuma status <session-id>` | Gets current status of a specific session |
-| **Stop Session** | `@niuma stop <session-id>` | Stops a running session (owners and admins only) |
-| **Quick Reply** | `@niuma what is 2+2?` | Answers simple questions directly (no session created) |
+| **New Task** | `@niuma create a Python script that prints "hello world"` | Manager delegates a new worker session |
+| **Resume Session** | `@niuma continue session 0320-a7f3` | Manager resumes an existing worker session |
+| **Ask Manager** | `@niuma what sessions are running?` | Manager answers from its memory |
+| **Quick Reply** | `@niuma what is 2+2?` | Manager answers directly (no worker created) |
 
-The dispatcher analyzes each message and determines the appropriate action. Session results are posted back to the chat when complete.
+The Manager analyzes each message and determines the appropriate action. Session results are posted back to the chat when complete.
 
 ## Development
 
@@ -149,26 +216,10 @@ The dispatcher analyzes each message and determines the appropriate action. Sess
 pip install -e ".[dev]"
 ```
 
-This includes pytest, pytest-asyncio, and pytest-cov.
-
 ### Run Tests
 
-Execute the full test suite with coverage:
-
 ```bash
-pytest
-```
-
-Run with verbose output:
-
-```bash
-pytest -v
-```
-
-Run a specific test file:
-
-```bash
-pytest tests/test_poller.py
+python3.9 -m pytest tests/ -v
 ```
 
 Check coverage:
@@ -177,18 +228,11 @@ Check coverage:
 pytest --cov=src/niuma --cov-report=term-missing
 ```
 
-### Project Structure
+### Project Structure Rationale
 
-- `src/niuma/` - Core modules
-  - `main.py` - CLI entry point and bot orchestration
-  - `poller.py` - Teams chat polling and message parsing
-  - `dispatcher.py` - Intent classification via Claude
-  - `session.py` - Claude Code session management
-  - `responder.py` - Sending messages back to Teams
-  - `config.py` - Configuration loading and validation
-  - `db.py` - SQLite database for state tracking
-- `tests/` - Test suite with unit and integration tests
-- `config.yaml.example` - Example configuration
+- `handler.py` contains all routing logic so `main.py` stays a thin coordinator
+- `watcher.py` contains session-watching so it can be tested independently
+- `manager.py` is the central brain; state is persisted via `db.py`'s `bot_state` table
 
 ## Troubleshooting
 
@@ -201,3 +245,5 @@ pytest --cov=src/niuma --cov-report=term-missing
 **claude CLI auth expired**: Run `claude auth login` to refresh authentication.
 
 **Sessions timing out**: Check that claude CLI is working: `claude --version`. Increase `session_timeout` in config if needed (default: 86400 seconds = 24 hours).
+
+**Manager lost context after restart**: The Manager session_id is persisted in the DB. If the DB was deleted, the Manager starts fresh with no prior memory.
