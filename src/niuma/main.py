@@ -55,8 +55,8 @@ class NiumaBot:
         await self._db.init()
         self._poller = Poller(self._config.teams)
         self._manager = Manager(self._config.claude, db=self._db)
-        self._session_mgr = SessionManager(self._config.claude, self._db)
-        self._responder = Responder()
+        self._session_mgr = SessionManager(self._config.claude, self._db, bot_name=self._config.bot.name)
+        self._responder = Responder(bot_name=self._config.bot.name)
         self._manager_chat_id: Optional[str] = None
 
         # Optimization 1: Resume Manager session from DB if one was saved
@@ -83,10 +83,11 @@ class NiumaBot:
         for prefix in ("pdx-container-", "sjc-container-"):
             short_host = short_host.replace(prefix, "pdx-" if "pdx" in prefix else "sjc-")
 
+        bot = self._config.bot
         try:
             chat_info = await create_session_chat(
                 session_id="mgr",
-                topic=f"{short_host} manager",
+                topic=f"{bot.emoji} {bot.name} [mgr] {short_host}",
                 user_email=self._config.security.admin_users[0] if self._config.security.admin_users else "unknown",
             )
             self._manager_chat_id = chat_info["chat_id"]
@@ -98,7 +99,7 @@ class NiumaBot:
             # Send welcome message
             await self._responder.send_text(
                 self._manager_chat_id,
-                f"**niuma Manager** started on `{hostname}`\n\n"
+                f"**{bot.emoji} {bot.name} Manager** started on `{hostname}`\n\n"
                 f"This is the Manager's communication channel. "
                 f"All user interactions and worker reports come through here."
             )
@@ -123,10 +124,11 @@ class NiumaBot:
 
         # Notify users in manager chat if available
         if self._manager_chat_id and self._responder:
+            bot = self._config.bot
             try:
                 await self._responder.send_text(
                     self._manager_chat_id,
-                    "**niuma Manager** is shutting down. Active workers will finish before exit.",
+                    f"**{bot.emoji} {bot.name} Manager** is shutting down. Active workers will finish before exit.",
                 )
             except Exception:
                 pass
@@ -163,8 +165,20 @@ class NiumaBot:
 
     async def poll_once(self) -> None:
         """Single poll cycle across all configured chats + manager chat + session chats."""
+        # Merge config chat_ids with dynamically watched chats from DB
+        watched = await self._db.list_watched_chats()
+        watched_ids = {w["chat_id"]: w["mode"] for w in watched}
+        # Config chat_ids are always full mode
+        all_trigger_chats: dict[str, str] = {cid: "full" for cid in self._config.teams.chat_ids}
+        all_trigger_chats.update(watched_ids)
+
+        # reply_only set: from config + DB watched chats with mode='reply_only'
+        reply_only_from_config = set(self._config.teams.reply_only_chat_ids)
+        reply_only_from_db = {cid for cid, mode in watched_ids.items() if mode == "reply_only"}
+        self._dynamic_reply_only = reply_only_from_config | reply_only_from_db
+
         # Poll configured trigger chats (@niuma required)
-        for chat_id in self._config.teams.chat_ids:
+        for chat_id in all_trigger_chats:
             await self._poll_chat(chat_id)
 
         # Poll manager chat (no @niuma needed, direct conversation)
@@ -291,7 +305,7 @@ class NiumaBot:
 
             # Issue 4: Skip bot's own messages (check both raw body and signature).
             # parse_messages already strips HTML, so the check on msg.body is correct.
-            if "Sent via Claude Code" in msg.body:
+            if "ai-pim-utils" in msg.body:
                 continue
 
             prompt = msg.body.strip()
@@ -347,7 +361,7 @@ class NiumaBot:
         for msg in new_messages:
             if not self._is_allowed(msg.sender_email):
                 continue
-            if "Sent via Claude Code" in msg.body:
+            if "ai-pim-utils" in msg.body:
                 continue
             prompt = msg.body.strip()
             if not prompt:
@@ -359,6 +373,10 @@ class NiumaBot:
         await self._db.set_poll_state(chat_id, newest_id)
 
     def _is_reply_only(self, chat_id: str) -> bool:
+        # Use dynamic set if populated by poll_once, otherwise fall back to config
+        dynamic = getattr(self, "_dynamic_reply_only", None)
+        if dynamic is not None:
+            return chat_id in dynamic
         return chat_id in self._config.teams.reply_only_chat_ids
 
     async def _handle_message(

@@ -84,9 +84,10 @@ async def handle_new(
         if decision.dedicated_chat:
             try:
                 prompt_preview = (decision.prompt or "")[:50]
+                bot_cfg = bot._config.bot
                 chat_info = await create_session_chat(
                     session_id=sid,
-                    topic=prompt_preview,
+                    topic=f"{bot_cfg.emoji} {bot_cfg.name} [{sid}] {prompt_preview}",
                     user_email=user_email,
                 )
                 session_chat_id = chat_info["chat_id"]

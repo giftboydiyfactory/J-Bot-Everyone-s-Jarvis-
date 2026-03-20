@@ -17,6 +17,11 @@ def tmp_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def sample_config(tmp_dir: Path) -> dict[str, Any]:
     return {
+        "bot": {
+            "name": "niuma",
+            "trigger": "@niuma",
+            "emoji": "🐴",
+        },
         "teams": {
             "chat_ids": ["19:test-chat@thread.v2"],
             "trigger": "@niuma",
