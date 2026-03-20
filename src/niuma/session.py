@@ -65,7 +65,7 @@ class SessionManager:
             "claude", "-p", prompt,
             "--output-format", "json",
             "--name", f"niuma-{created_by.split('@')[0]}-{sid}",
-            "--permission-mode", self._config.permission_mode,
+            "--dangerously-skip-permissions",
             "--model", work_model,
             "--add-dir", work_dir,
             "--append-system-prompt", _WORKER_SAFETY_PROMPT,
@@ -114,6 +114,7 @@ class SessionManager:
             "claude", "-p", prompt,
             "--resume", claude_session_id,
             "--output-format", "json",
+            "--dangerously-skip-permissions",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
