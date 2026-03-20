@@ -61,8 +61,9 @@ def build_dispatcher_prompt(
             last_output_preview = ""
             if s.get("last_output"):
                 last_output_preview = f' last_result="{s["last_output"][:120]}..."'
+            resumable = "YES" if s.get("claude_session") else "NO"
             session_lines.append(
-                f"  - [{s['id']}] status={s['status']} by={s['created_by']} "
+                f"  - [{s['id']}] status={s['status']} resumable={resumable} by={s['created_by']} "
                 f"cwd={s.get('cwd', 'N/A')} prompt=\"{s['prompt'][:120]}\""
                 f"{last_output_preview}"
             )
@@ -76,7 +77,10 @@ Message: {user_prompt}
 
 {sessions_text}
 
-IMPORTANT: If the user refers to a previous task (e.g. "刚才那个", "continue", "接着上次"), match it to an existing session and use action "resume" with that session_id. Only use "new" if the user is clearly requesting something unrelated to any existing session."""
+IMPORTANT:
+- If the user refers to a previous task (e.g. "刚才那个", "continue", "接着上次"), match it to an existing session and use action "resume" with that session_id.
+- Only resume sessions marked resumable=YES. If a session is resumable=NO (was killed/failed before completing), tell the user via "reply" that it cannot be resumed and suggest starting a new task.
+- Only use "new" if the user is clearly requesting something unrelated to any existing session."""
 
 
 @dataclass(frozen=True)
