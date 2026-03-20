@@ -48,6 +48,41 @@ class NiumaBot:
         self._manager = Manager(self._config.claude)
         self._session_mgr = SessionManager(self._config.claude, self._db)
         self._responder = Responder()
+        self._manager_chat_id: Optional[str] = None
+
+    async def _ensure_manager_chat(self) -> str:
+        """Create or retrieve the Manager's dedicated chat group."""
+        if self._manager_chat_id:
+            return self._manager_chat_id
+
+        import socket
+        hostname = socket.gethostname()
+        # Shorten: pdx-container-xterm-081.prd.it.nvidia.com -> pdx-xterm-081
+        short_host = hostname.split(".")[0]
+        for prefix in ("pdx-container-", "sjc-container-"):
+            short_host = short_host.replace(prefix, "pdx-" if "pdx" in prefix else "sjc-")
+
+        try:
+            chat_info = await create_session_chat(
+                session_id="mgr",
+                topic=f"{short_host} manager",
+                user_email=self._config.security.admin_users[0] if self._config.security.admin_users else "unknown",
+            )
+            self._manager_chat_id = chat_info["chat_id"]
+            logger.info("Manager chat created: %s (%s)", chat_info["topic"], self._manager_chat_id[:30])
+
+            # Send welcome message
+            await self._responder.send_text(
+                self._manager_chat_id,
+                f"**niuma Manager** started on `{hostname}`\n\n"
+                f"This is the Manager's communication channel. "
+                f"All user interactions and worker reports come through here."
+            )
+        except Exception as e:
+            logger.warning("Failed to create manager chat: %s", e)
+            return ""
+
+        return self._manager_chat_id
 
     async def shutdown(self) -> None:
         self._running = False
@@ -62,6 +97,9 @@ class NiumaBot:
             self._config.teams.poll_interval,
         )
 
+        # Create manager's dedicated chat on startup
+        await self._ensure_manager_chat()
+
         while self._running:
             try:
                 await self.poll_once()
@@ -70,11 +108,16 @@ class NiumaBot:
             await asyncio.sleep(self._config.teams.poll_interval)
 
     async def poll_once(self) -> None:
-        """Single poll cycle across all configured chats + session chats."""
+        """Single poll cycle across all configured chats + manager chat + session chats."""
+        # Poll configured trigger chats (@niuma required)
         for chat_id in self._config.teams.chat_ids:
             await self._poll_chat(chat_id)
 
-        # Also poll session-dedicated chats
+        # Poll manager chat (no @niuma needed, direct conversation)
+        if self._manager_chat_id:
+            await self._poll_manager_chat(self._manager_chat_id)
+
+        # Poll session-dedicated chats
         if self._config.teams.auto_session_chats:
             session_chat_ids = await self._db.list_session_chat_ids()
             for chat_id in session_chat_ids:
@@ -198,6 +241,44 @@ class NiumaBot:
                 self._fire_and_track(self._watch_session(chat_id, sid))
             except (ValueError, RuntimeError) as e:
                 await self._responder.send_text(chat_id, str(e))
+
+        await self._db.set_poll_state(chat_id, newest_id)
+
+    async def _poll_manager_chat(self, chat_id: str) -> None:
+        """Poll the Manager's dedicated chat. Messages here go directly to Manager."""
+        from niuma.poller import TeamsCliError
+
+        try:
+            raw = await self._poller.poll_chat(chat_id)
+        except (TeamsCliError, RuntimeError):
+            return
+
+        messages = self._poller.parse_messages(raw)
+        if not messages:
+            return
+
+        last_seen = await self._db.get_poll_state(chat_id)
+        try:
+            newest_id = max(messages, key=lambda m: int(m.id)).id
+        except ValueError:
+            newest_id = messages[0].id
+
+        new_messages = self._poller.filter_new(messages, last_seen)
+        if not new_messages:
+            await self._db.set_poll_state(chat_id, newest_id)
+            return
+
+        for msg in new_messages:
+            if not self._is_allowed(msg.sender_email):
+                continue
+            if "Sent via Claude Code" in msg.body:
+                continue
+            prompt = msg.body.strip()
+            if not prompt:
+                continue
+
+            # Route through Manager, responses go to manager chat
+            await self._handle_message(chat_id, msg.sender_email, prompt, msg.id)
 
         await self._db.set_poll_state(chat_id, newest_id)
 
