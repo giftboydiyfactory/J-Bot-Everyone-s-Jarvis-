@@ -39,6 +39,12 @@ CREATE TABLE IF NOT EXISTS poll_state (
     last_message_id TEXT,
     updated_at      REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS bot_state (
+    key             TEXT PRIMARY KEY,
+    value           TEXT,
+    updated_at      REAL NOT NULL
+);
 """
 
 
@@ -84,6 +90,24 @@ class Database:
         self._conn = await aiosqlite.connect(self._db_path)
         self._conn.row_factory = aiosqlite.Row
         await self._conn.executescript(_SCHEMA)
+        await self._conn.commit()
+        await self._migrate()
+
+    async def _migrate(self) -> None:
+        """Apply any additive migrations that are safe to re-run.
+
+        Uses ALTER TABLE … ADD COLUMN IF NOT EXISTS idiom via a try/except
+        so that this method is idempotent on both fresh and existing DBs.
+        """
+        migrations = [
+            # Add bot_state table (already in _SCHEMA but guard for very old DBs)
+            "CREATE TABLE IF NOT EXISTS bot_state (key TEXT PRIMARY KEY, value TEXT, updated_at REAL NOT NULL)",
+        ]
+        for stmt in migrations:
+            try:
+                await self._conn.execute(stmt)
+            except Exception:
+                pass  # already applied
         await self._conn.commit()
 
     async def close(self) -> None:
@@ -273,6 +297,33 @@ class Database:
         )
         await self._conn.commit()
         return dict(await self._get_row(sid))
+
+    async def get_bot_state(self, key: str) -> Optional[str]:
+        """Retrieve a bot-level state value by key."""
+        cursor = await self._conn.execute(
+            "SELECT value FROM bot_state WHERE key = ?", (key,)
+        )
+        row = await cursor.fetchone()
+        return row["value"] if row else None
+
+    async def set_bot_state(self, key: str, value: str) -> None:
+        """Persist a bot-level state value."""
+        now = time.time()
+        await self._conn.execute(
+            """INSERT INTO bot_state (key, value, updated_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(key) DO UPDATE SET value=?, updated_at=?""",
+            (key, value, now, value, now),
+        )
+        await self._conn.commit()
+
+    async def get_total_cost_usd(self) -> float:
+        """Return the sum of cost_usd across all sessions."""
+        cursor = await self._conn.execute(
+            "SELECT COALESCE(SUM(cost_usd), 0) AS total FROM sessions"
+        )
+        row = await cursor.fetchone()
+        return float(row["total"]) if row else 0.0
 
     async def _get_row(self, row_id: str) -> Optional[aiosqlite.Row]:
         cursor = await self._conn.execute(

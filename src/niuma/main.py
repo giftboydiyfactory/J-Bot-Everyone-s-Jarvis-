@@ -11,15 +11,23 @@ from typing import Optional
 
 from niuma.config import NiumaConfig, load_config, ConfigError
 from niuma.db import Database
-from niuma.manager import Manager, ManagerDecision
+from niuma.manager import Manager
 from niuma.poller import Poller
 from niuma.teams_api import create_session_chat_async as create_session_chat
 from niuma.responder import Responder
 from niuma.session import SessionManager
 
+# TODO (multi-manager): Add config option for per-directory managers,
+# e.g. config.claude.per_dir_managers: {"/home/user/project": "manager_session_id"}.
+# Each dir would get its own persistent Manager session so context is scoped by project.
+
 logger = logging.getLogger("niuma")
 
 _DEFAULT_CONFIG = Path.home() / ".niuma" / "config.yaml"
+
+_BOT_STATE_MANAGER_CHAT = "manager_chat_id"
+
+_GRACEFUL_SHUTDOWN_TIMEOUT = 30  # seconds to wait for running workers on SIGTERM/SIGINT
 
 
 class NiumaBot:
@@ -31,6 +39,7 @@ class NiumaBot:
         self._session_mgr: Optional[SessionManager] = None
         self._responder: Optional[Responder] = None
         self._running = False
+        self._shutting_down = False
         self._backoff_seconds: dict[str, int] = {}
         self._background_tasks: set[asyncio.Task] = set()
 
@@ -45,13 +54,25 @@ class NiumaBot:
         self._db = Database(self._config.storage.db_path)
         await self._db.init()
         self._poller = Poller(self._config.teams)
-        self._manager = Manager(self._config.claude)
+        self._manager = Manager(self._config.claude, db=self._db)
         self._session_mgr = SessionManager(self._config.claude, self._db)
         self._responder = Responder()
         self._manager_chat_id: Optional[str] = None
 
+        # Optimization 1: Resume Manager session from DB if one was saved
+        await self._manager.load_state()
+
+        # Optimization 2: Resume manager chat from DB if one was saved
+        saved_chat = await self._db.get_bot_state(_BOT_STATE_MANAGER_CHAT)
+        if saved_chat:
+            self._manager_chat_id = saved_chat
+            logger.info("Resumed Manager chat from DB: %s", saved_chat[:30])
+
     async def _ensure_manager_chat(self) -> str:
-        """Create or retrieve the Manager's dedicated chat group."""
+        """Create or retrieve the Manager's dedicated chat group.
+
+        Checks DB first (optimization 2) so restarts reuse the same chat.
+        """
         if self._manager_chat_id:
             return self._manager_chat_id
 
@@ -71,6 +92,9 @@ class NiumaBot:
             self._manager_chat_id = chat_info["chat_id"]
             logger.info("Manager chat created: %s (%s)", chat_info["topic"], self._manager_chat_id[:30])
 
+            # Persist to DB so restarts reuse this chat (optimization 2)
+            await self._db.set_bot_state(_BOT_STATE_MANAGER_CHAT, self._manager_chat_id)
+
             # Send welcome message
             await self._responder.send_text(
                 self._manager_chat_id,
@@ -85,7 +109,37 @@ class NiumaBot:
         return self._manager_chat_id
 
     async def shutdown(self) -> None:
+        """Gracefully shut down the bot (optimization 7).
+
+        Waits up to _GRACEFUL_SHUTDOWN_TIMEOUT seconds for running background
+        tasks (worker watchers) to finish before forcibly cancelling them.
+        """
+        if self._shutting_down:
+            return
+        self._shutting_down = True
         self._running = False
+        logger.info("Shutdown requested — waiting up to %ds for %d background tasks",
+                    _GRACEFUL_SHUTDOWN_TIMEOUT, len(self._background_tasks))
+
+        # Notify users in manager chat if available
+        if self._manager_chat_id and self._responder:
+            try:
+                await self._responder.send_text(
+                    self._manager_chat_id,
+                    "**niuma Manager** is shutting down. Active workers will finish before exit.",
+                )
+            except Exception:
+                pass
+
+        if self._background_tasks:
+            _, pending = await asyncio.wait(
+                list(self._background_tasks),
+                timeout=_GRACEFUL_SHUTDOWN_TIMEOUT,
+            )
+            for task in pending:
+                logger.warning("Cancelling task that did not finish in time: %s", task.get_name())
+                task.cancel()
+
         if self._db:
             await self._db.close()
 
@@ -289,187 +343,16 @@ class NiumaBot:
         self, chat_id: str, user_email: str, prompt: str,
         message_id: str = "",
     ) -> None:
-        """Route user message through the stateful Manager session.
-
-        The Manager remembers all context and decides: new, resume, reply, or report.
-        """
-        reply_only = self._is_reply_only(chat_id)
-        rt = message_id
-
-        try:
-            decision = await self._manager.decide(
-                user_message=prompt,
-                user_email=user_email,
-            )
-        except Exception:
-            logger.exception("Manager failed for message from %s", user_email)
-            return
-
-        logger.info("Manager: action=%s for user=%s", decision.action, user_email)
-
-        # Enforce reply-only mode
-        if reply_only and decision.action not in ("reply", "report"):
-            await self._responder.send_text(
-                chat_id,
-                decision.reply_text or "This chat is in reply-only mode.",
-                reply_to=rt,
-            )
-            return
-
-        if decision.action == "new":
-            await self._handle_new(chat_id, user_email, decision, rt)
-        elif decision.action == "resume":
-            await self._handle_resume(chat_id, decision, rt, user_email=user_email)
-        elif decision.action in ("reply", "report"):
-            await self._responder.send_text(chat_id, decision.reply_text or "", reply_to=rt)
-
-    async def _handle_new(
-        self, chat_id: str, user_email: str, decision: ManagerDecision,
-        reply_to: str = "",
-    ) -> None:
-        try:
-            session = await self._session_mgr.start_session(
-                chat_id=chat_id,
-                created_by=user_email,
-                prompt=decision.prompt or "",
-                cwd=decision.cwd,
-                model=None,
-                trigger_message_id=reply_to,
-            )
-            sid = session["id"]
-            session_chat_id = None
-
-            # Only create dedicated chat for complex tasks
-            if decision.dedicated_chat:
-                try:
-                    prompt_preview = (decision.prompt or "")[:50]
-                    chat_info = await create_session_chat(
-                        session_id=sid,
-                        topic=prompt_preview,
-                        user_email=user_email,
-                    )
-                    session_chat_id = chat_info["chat_id"]
-                    await self._db.update_session(sid, session_chat_id=session_chat_id)
-
-                    web_url = chat_info["web_url"]
-                    await self._responder.send_text(
-                        chat_id,
-                        f"🚀 session [{sid}] started → [open session chat]({web_url})",
-                        reply_to=reply_to,
-                    )
-                    await self._responder.send_processing(session_chat_id, sid)
-                except Exception as e:
-                    logger.warning("Failed to create session chat: %s. Using main chat.", e)
-                    session_chat_id = None
-
-            if not session_chat_id:
-                await self._responder.send_processing(chat_id, sid, reply_to=reply_to)
-
-            # Watch session — send results to session chat if available, else main chat
-            output_chat = session_chat_id or chat_id
-            self._fire_and_track(
-                self._watch_session(output_chat, sid, reply_to="" if session_chat_id else reply_to)
-            )
-        except RuntimeError as e:
-            await self._responder.send_text(chat_id, str(e), reply_to=reply_to)
-
-    async def _handle_resume(
-        self, chat_id: str, decision: ManagerDecision,
-        reply_to: str = "", user_email: str = "",
-    ) -> None:
-        sid = decision.session_id
-        if not sid:
-            await self._responder.send_text(chat_id, "No session ID to resume.", reply_to=reply_to)
-            return
-
-        session = await self._db.get_session(sid)
-        if not session:
-            await self._responder.send_text(
-                chat_id, f"Session {sid} not found.",
-                reply_to=reply_to,
-            )
-            return
-
-        # Ownership/admin check: only the session owner or admins can resume
-        is_owner = session.get("created_by") == user_email
-        is_admin = user_email in self._config.security.admin_users
-        if not (is_owner or is_admin):
-            await self._responder.send_text(
-                chat_id,
-                f"Permission denied: session [{session['id']}] belongs to {session.get('created_by')}.",
-                reply_to=reply_to,
-            )
-            return
-
-        actual_sid = session["id"]
-        # Route output to session's dedicated chat if it has one
-        session_chat_id = session.get("session_chat_id")
-        output_chat = session_chat_id or chat_id
-        output_reply_to = "" if session_chat_id else reply_to
-
-        try:
-            await self._session_mgr.resume_session(
-                session_id=actual_sid, prompt=decision.prompt or ""
-            )
-            if session_chat_id:
-                await self._responder.send_text(
-                    chat_id, f"🔄 session [{actual_sid}] resuming → results in session chat",
-                    reply_to=reply_to,
-                )
-            await self._responder.send_processing(output_chat, actual_sid, reply_to=output_reply_to)
-            self._fire_and_track(self._watch_session(output_chat, actual_sid, output_reply_to))
-        except (ValueError, RuntimeError) as e:
-            await self._responder.send_text(chat_id, str(e), reply_to=reply_to)
+        """Delegate to handler module for message routing."""
+        from niuma.handler import handle_message
+        await handle_message(self, chat_id, user_email, prompt, message_id)
 
     async def _watch_session(
         self, chat_id: str, session_id: str, reply_to: str = "",
     ) -> None:
-        """Poll DB until session completes, then send result as thread reply."""
-        max_wait = self._config.claude.session_timeout + 60
-        elapsed = 0
-        poll_interval = 2
-        while elapsed < max_wait:
-            await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
-            session = await self._session_mgr.get_result(session_id)
-            if not session:
-                return
-            status = session["status"]
-            if status in ("completed", "failed", "timeout"):
-                result_text = session.get("last_output", "")
-                error_text = None
-                if status == "timeout":
-                    error_text = "Session timed out (24h)"
-                elif status == "failed":
-                    error_text = result_text or "Unknown error"
-                    result_text = None
-
-                # Send result to Teams
-                if error_text:
-                    await self._responder.send_result(
-                        chat_id, session_id, error=error_text, reply_to=reply_to,
-                    )
-                else:
-                    await self._responder.send_result(
-                        chat_id, session_id, result=result_text, reply_to=reply_to,
-                    )
-
-                # Feed result back to Manager so it remembers
-                try:
-                    mgr_decision = await self._manager.feed_worker_result(
-                        session_id=session_id,
-                        result=result_text or error_text or "",
-                        status=status,
-                    )
-                    # If Manager wants to report something, send it
-                    if mgr_decision.action == "report" and mgr_decision.reply_text:
-                        await self._responder.send_text(
-                            chat_id, mgr_decision.reply_text, reply_to=reply_to,
-                        )
-                except Exception:
-                    logger.debug("Failed to feed worker result to Manager", exc_info=True)
-
-                return
+        """Delegate to watcher module for session watching."""
+        from niuma.watcher import watch_session
+        await watch_session(self, chat_id, session_id, reply_to)
 
     def _is_allowed(self, email: str) -> bool:
         return (

@@ -88,3 +88,42 @@ async def test_add_and_get_messages(db: Database) -> None:
     assert len(msgs) == 2
     assert msgs[0]["role"] == "user"
     assert msgs[1]["role"] == "assistant"
+
+
+@pytest.mark.asyncio
+async def test_bot_state(db: Database) -> None:
+    # Initially absent
+    val = await db.get_bot_state("manager_session_id")
+    assert val is None
+
+    # Set and retrieve
+    await db.set_bot_state("manager_session_id", "sid-abc123")
+    val = await db.get_bot_state("manager_session_id")
+    assert val == "sid-abc123"
+
+    # Overwrite
+    await db.set_bot_state("manager_session_id", "sid-newvalue")
+    val = await db.get_bot_state("manager_session_id")
+    assert val == "sid-newvalue"
+
+
+@pytest.mark.asyncio
+async def test_get_total_cost_usd(db: Database) -> None:
+    # No sessions: total is 0
+    total = await db.get_total_cost_usd()
+    assert total == 0.0
+
+    # Add sessions with cost
+    s1 = await db.create_session(chat_id="c", created_by="u", prompt="p1", cwd="/", model="s")
+    s2 = await db.create_session(chat_id="c", created_by="u", prompt="p2", cwd="/", model="s")
+    await db.update_session(s1["id"], cost_usd=0.10)
+    await db.update_session(s2["id"], cost_usd=0.05)
+
+    total = await db.get_total_cost_usd()
+    assert abs(total - 0.15) < 1e-9
+
+
+@pytest.mark.asyncio
+async def test_init_creates_bot_state_table(db: Database) -> None:
+    tables = await db.list_tables()
+    assert "bot_state" in tables
