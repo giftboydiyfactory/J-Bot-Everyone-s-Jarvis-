@@ -58,6 +58,7 @@ def build_dispatcher_prompt(
     user_prompt: str,
     user_email: str,
     sessions: list[dict[str, Any]],
+    reply_only: bool = False,
 ) -> str:
     """Build the prompt sent to the dispatcher Claude session."""
     if sessions:
@@ -76,6 +77,12 @@ def build_dispatcher_prompt(
     else:
         sessions_text = "No known sessions."
 
+    reply_only_hint = (
+        "\n- REPLY-ONLY MODE: This chat is in reply-only mode. You MUST use action \"reply\" and answer the question directly. "
+        "Do NOT use \"new\", \"resume\", \"stop\", or \"import\". Only \"reply\", \"list\", \"status\", and \"scan_all\" are allowed."
+        if reply_only else ""
+    )
+
     return f"""\
 User: {user_email}
 Message: {user_prompt}
@@ -85,7 +92,8 @@ Message: {user_prompt}
 IMPORTANT:
 - If the user refers to a previous task (e.g. "刚才那个", "continue", "接着上次"), match it to an existing session and use action "resume" with that session_id.
 - Only resume sessions marked resumable=YES. If a session is resumable=NO (was killed/failed before completing), tell the user via "reply" that it cannot be resumed and suggest starting a new task.
-- Only use "new" if the user is clearly requesting something unrelated to any existing session."""
+- Only use "new" if the user is clearly requesting something unrelated to any existing session.
+{reply_only_hint}"""
 
 
 @dataclass(frozen=True)
@@ -129,12 +137,14 @@ class Dispatcher:
         user_prompt: str,
         user_email: str,
         sessions: list[dict[str, Any]],
+        reply_only: bool = False,
     ) -> DispatchResult:
         """Call Claude Code dispatcher and return structured routing decision."""
         prompt = build_dispatcher_prompt(
             user_prompt=user_prompt,
             user_email=user_email,
             sessions=sessions,
+            reply_only=reply_only,
         )
 
         proc = await asyncio.create_subprocess_exec(

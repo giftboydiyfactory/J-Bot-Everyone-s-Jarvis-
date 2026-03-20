@@ -126,22 +126,34 @@ class NiumaBot:
 
         await self._db.set_poll_state(chat_id, newest_id)
 
+    def _is_reply_only(self, chat_id: str) -> bool:
+        return chat_id in self._config.teams.reply_only_chat_ids
+
     async def _handle_message(
         self, chat_id: str, user_email: str, prompt: str
     ) -> None:
         """Dispatch a single user message through the Claude dispatcher."""
+        reply_only = self._is_reply_only(chat_id)
+
         try:
             sessions = await self._session_mgr.list_active()
             dispatch = await self._dispatcher.dispatch(
                 user_prompt=prompt,
                 user_email=user_email,
                 sessions=sessions,
+                reply_only=reply_only,
             )
         except Exception:
             logger.exception("Dispatcher failed for message from %s", user_email)
             return
 
-        logger.info("Dispatch: action=%s for user=%s", dispatch.action, user_email)
+        logger.info("Dispatch: action=%s for user=%s chat=%s", dispatch.action, user_email, "reply_only" if reply_only else "full")
+
+        # Enforce reply-only mode
+        if reply_only and dispatch.action not in ("reply", "list", "status", "scan_all"):
+            # Re-dispatch as reply
+            await self._responder.send_text(chat_id, dispatch.reply_text or dispatch.prompt or "This chat is in reply-only mode. Please use the main chat for task execution.")
+            return
 
         if dispatch.action == "new":
             await self._handle_new(chat_id, user_email, dispatch)

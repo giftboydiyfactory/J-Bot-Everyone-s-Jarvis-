@@ -16,6 +16,7 @@ class TeamsConfig:
     chat_ids: list[str]
     trigger: str
     poll_interval: int
+    reply_only_chat_ids: list[str]
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,7 @@ def load_config(path: Path) -> NiumaConfig:
             chat_ids=_require(teams_raw, "chat_ids", "teams"),
             trigger=teams_raw.get("trigger", "@niuma"),
             poll_interval=teams_raw.get("poll_interval", 60),
+            reply_only_chat_ids=teams_raw.get("reply_only_chat_ids", []),
         ),
         claude=ClaudeConfig(
             dispatcher_model=claude_raw.get("dispatcher_model", "sonnet"),
