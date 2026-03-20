@@ -100,9 +100,12 @@ class SessionManager:
                 f"Max concurrent sessions ({self._config.max_concurrent}) reached"
             )
 
-        claude_session_id = session["claude_session"]
+        claude_session_id = session.get("claude_session")
         if not claude_session_id:
-            raise ValueError(f"Session {session_id} has no claude session to resume")
+            raise ValueError(
+                f"Session {session_id} was killed before completing — "
+                f"it has no claude session to resume. Please start a new task instead."
+            )
 
         await self._db.add_message(session_id, "user", prompt)
         await self._db.update_session(session_id, status="running")
