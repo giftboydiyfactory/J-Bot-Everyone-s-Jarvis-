@@ -51,7 +51,7 @@ async def test_full_flow_new_session(bot: NiumaBot) -> None:
     teams_read_mock = AsyncMock()
     teams_read_mock.communicate = AsyncMock(return_value=(
         _teams_read_output([{
-            "id": "msg-1",
+            "id": "1742385601000",
             "from": {"user": {"displayName": "Jack", "email": "testuser@nvidia.com"}},
             "body": {"content": "@niuma analyze this repo"},
             "createdDateTime": "2026-03-19T10:00:00Z",
@@ -93,6 +93,12 @@ async def test_full_flow_new_session(bot: NiumaBot) -> None:
             else:
                 return worker_mock
         return teams_read_mock
+
+    # Pre-seed the poll state so the bot treats the message as new.
+    # Issue 2 fix: first-time polls (no poll_state) skip all existing messages,
+    # so we simulate that a prior poll recorded an older numeric message ID.
+    chat_id = bot._config.teams.chat_ids[0]
+    await bot._db.set_poll_state(chat_id, "1742385600000")
 
     with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess):
         await bot.poll_once()
