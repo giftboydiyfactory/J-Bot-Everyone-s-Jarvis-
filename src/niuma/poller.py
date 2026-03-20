@@ -124,5 +124,18 @@ class Poller:
 
 
 def _strip_html(text: str) -> str:
-    """Remove HTML tags from text."""
-    return re.sub(r"<[^>]+>", "", text).strip()
+    """Remove HTML tags from text, preserving link URLs inline."""
+    # Replace <a href="URL">text</a> with "text (URL)"
+    text = re.sub(
+        r'<a\s+[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
+        r"\2 (\1)",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    # Replace <br/> and <br> with newline
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    # Remove remaining HTML tags
+    text = re.sub(r"<[^>]+>", "", text)
+    # Clean up &nbsp; and other entities
+    text = text.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    return text.strip()
