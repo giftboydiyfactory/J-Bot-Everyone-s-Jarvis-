@@ -159,7 +159,7 @@ class NiumaBot:
         if dispatch.action == "new":
             await self._handle_new(chat_id, user_email, dispatch, rt)
         elif dispatch.action == "resume":
-            await self._handle_resume(chat_id, dispatch, rt)
+            await self._handle_resume(chat_id, dispatch, rt, user_email=user_email)
         elif dispatch.action == "reply":
             await self._responder.send_text(chat_id, dispatch.reply_text or "", reply_to=rt)
         elif dispatch.action == "list":
@@ -254,18 +254,48 @@ class NiumaBot:
 
     async def _handle_resume(
         self, chat_id: str, dispatch: DispatchResult,
-        reply_to: str = "",
+        reply_to: str = "", user_email: str = "",
     ) -> None:
         sid = dispatch.session_id
         if not sid:
             await self._responder.send_text(chat_id, "No session ID to resume.", reply_to=reply_to)
             return
+
+        # Check if session exists in DB
+        session = await self._db.get_session(sid)
+
+        # If not in DB, try auto-import from Claude history
+        if not session:
+            all_scanned = scan_all_sessions()
+            match = None
+            for s in all_scanned:
+                if sid in s["claude_session"]:
+                    match = s
+                    break
+            if match:
+                session = await self._db.import_session(
+                    claude_session=match["claude_session"],
+                    chat_id=chat_id,
+                    created_by=user_email or "unknown",
+                    prompt=match.get("last_user_msg") or match.get("name") or "imported",
+                    cwd=match["cwd"],
+                )
+                logger.info("Auto-imported session %s -> [%s]", sid, session["id"])
+
+        if not session:
+            await self._responder.send_text(
+                chat_id, f"Session {sid} not found in DB or Claude history.",
+                reply_to=reply_to,
+            )
+            return
+
+        actual_sid = session["id"]
         try:
             await self._session_mgr.resume_session(
-                session_id=sid, prompt=dispatch.prompt or ""
+                session_id=actual_sid, prompt=dispatch.prompt or ""
             )
-            await self._responder.send_processing(chat_id, sid, reply_to=reply_to)
-            asyncio.create_task(self._watch_session(chat_id, sid, reply_to))
+            await self._responder.send_processing(chat_id, actual_sid, reply_to=reply_to)
+            asyncio.create_task(self._watch_session(chat_id, actual_sid, reply_to))
         except (ValueError, RuntimeError) as e:
             await self._responder.send_text(chat_id, str(e), reply_to=reply_to)
 

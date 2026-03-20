@@ -89,8 +89,31 @@ class Database:
         return dict(await self._get_row("sessions", sid))
 
     async def get_session(self, session_id: str) -> Optional[dict[str, Any]]:
+        """Find session by short ID, claude session UUID, or prefix of either."""
+        # Exact match on short ID
         row = await self._get_row("sessions", session_id)
-        return dict(row) if row else None
+        if row:
+            return dict(row)
+
+        # Prefix match on short ID
+        cursor = await self._conn.execute(
+            "SELECT * FROM sessions WHERE id LIKE ? ORDER BY created_at DESC LIMIT 1",
+            (session_id + "%",),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return dict(row)
+
+        # Prefix match on claude_session UUID
+        cursor = await self._conn.execute(
+            "SELECT * FROM sessions WHERE claude_session LIKE ? ORDER BY created_at DESC LIMIT 1",
+            ("%" + session_id + "%",),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return dict(row)
+
+        return None
 
     async def update_session(self, session_id: str, **fields: Any) -> None:
         fields["updated_at"] = time.time()
