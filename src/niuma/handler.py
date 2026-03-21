@@ -247,6 +247,29 @@ async def handle_resume(
     actual_sid = session["id"]
     # Route output to session's dedicated chat if it has one
     session_chat_id = session.get("session_chat_id")
+
+    # Create dedicated chat on resume if requested and not yet created
+    if not session_chat_id and decision.dedicated_chat:
+        from niuma.teams_api import create_session_chat_async as create_session_chat_resume
+        try:
+            prompt_preview = (decision.prompt or session.get("prompt") or "")[:50]
+            bot_cfg = bot._config.bot
+            chat_info = await create_session_chat_resume(
+                session_id=actual_sid,
+                topic=f"{bot_cfg.emoji} {bot_cfg.name} [{actual_sid}] {prompt_preview}",
+                user_email=user_email,
+            )
+            session_chat_id = chat_info["chat_id"]
+            await bot._db.update_session(actual_sid, session_chat_id=session_chat_id)
+            web_url = chat_info["web_url"]
+            await bot._responder.send_text(
+                chat_id,
+                f"🔄 session [{actual_sid}] resuming → [open session chat]({web_url})",
+                reply_to=reply_to,
+            )
+        except Exception as e:
+            logger.warning("Failed to create session chat on resume: %s", e)
+
     output_chat = session_chat_id or chat_id
     output_reply_to = "" if session_chat_id else reply_to
 
