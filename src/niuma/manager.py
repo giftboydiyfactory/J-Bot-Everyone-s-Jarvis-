@@ -78,6 +78,9 @@ Return a JSON object with ONE of these actions:
 4. {"action": "report", "reply_text": "status update"}
    Proactively report status/summary to the user
 
+6. {"action": "stop", "session_id": "XXXX"}
+   Stop/kill a running worker session. Use when user asks to stop, cancel, or kill a session.
+
 5. {"action": "new", "prompt": "...", "model": "opus"}
    Use "model" to override the default worker model for complex tasks.
    Options: "haiku" (simple/fast), "sonnet" (default), "opus" (complex reasoning)
@@ -96,7 +99,7 @@ Return ONLY valid JSON. No other text.\
 _MANAGER_SCHEMA = json.dumps({
     "type": "object",
     "properties": {
-        "action": {"enum": ["new", "resume", "reply", "report"]},
+        "action": {"enum": ["new", "resume", "reply", "report", "stop"]},
         "session_id": {"type": "string"},
         "prompt": {"type": "string"},
         "cwd": {"type": "string"},
