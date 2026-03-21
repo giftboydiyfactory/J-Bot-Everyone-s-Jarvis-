@@ -202,6 +202,14 @@ class NiumaBot:
         # Create manager's dedicated chat on startup
         await self._ensure_manager_chat()
 
+        # Auto-cleanup old sessions (older than 7 days)
+        try:
+            expired = await self._db.cleanup_expired_sessions()
+            if expired:
+                logger.info("Cleaned up %d expired sessions", expired)
+        except Exception:
+            logger.warning("Session cleanup failed", exc_info=True)
+
         while self._running:
             try:
                 await self.poll_once()
