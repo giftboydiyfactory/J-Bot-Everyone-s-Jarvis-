@@ -100,7 +100,7 @@ async def handle_message(
 
     # Hard enforcement: members must not trigger worker actions regardless of
     # what the Manager decided (safety net in case the hint was ignored).
-    if not is_admin and decision.action in ("new", "resume"):
+    if not is_admin and decision.action in ("new", "resume", "stop"):
         logger.warning(
             "Blocking action=%s for member user=%s — overriding to permission-denied reply",
             decision.action,
@@ -124,6 +124,8 @@ async def handle_message(
         await handle_resume(bot, chat_id, decision, rt, user_email=user_email)
     elif decision.action in ("reply", "report"):
         await bot._responder.send_text(chat_id, decision.reply_text or "", reply_to=rt)
+    elif decision.action == "stop":
+        await handle_stop(bot, chat_id, decision, rt)
 
 
 async def handle_new(
@@ -286,3 +288,35 @@ async def handle_resume(
         bot._fire_and_track(bot._watch_session(output_chat, actual_sid, output_reply_to))
     except (ValueError, RuntimeError) as e:
         await bot._responder.send_text(chat_id, str(e), reply_to=reply_to)
+
+
+async def handle_stop(
+    bot: "NiumaBot",
+    chat_id: str,
+    decision: "ManagerDecision",
+    reply_to: str = "",
+) -> None:
+    """Handle action='stop': kill a running worker session."""
+    sid = decision.session_id
+    if not sid:
+        await bot._responder.send_text(chat_id, "No session ID to stop.", reply_to=reply_to)
+        return
+
+    # Find the session - try exact match first, then prefix match
+    session = await bot._db.get_session(sid)
+    if not session:
+        # Try prefix match
+        all_sessions = await bot._db.list_sessions(status="running")
+        matches = [s for s in all_sessions if sid in s["id"]]
+        if len(matches) == 1:
+            session = matches[0]
+            sid = session["id"]
+
+    if not session:
+        await bot._responder.send_text(chat_id, f"Session {sid} not found.", reply_to=reply_to)
+        return
+
+    await bot._session_mgr.stop_session(sid)
+    await bot._responder.send_text(
+        chat_id, f"\U0001f6d1 session [{sid}] stopped.", reply_to=reply_to,
+    )
