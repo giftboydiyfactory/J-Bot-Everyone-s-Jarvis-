@@ -182,7 +182,4 @@ If not authenticated, follow the [authenticating-entra-device-code](../authentic
 ## Related Skills
 
 - [authenticating-entra-device-code](../authenticating-entra-device-code/SKILL.md) — Authentication flow
-- [managing-outlook-email](../managing-outlook-email/SKILL.md) — Email read operations
-- [managing-calendar](../managing-calendar/SKILL.md) — Calendar read operations
-- [managing-teams](../managing-teams/SKILL.md) — Teams read operations
-- [managing-confluence](../managing-confluence/SKILL.md) — Confluence read operations
+- [managing-teams](../managing-teams/SKILL.md) — Teams read operations and Graph API
