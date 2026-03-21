@@ -30,14 +30,25 @@ def get_user_role(
     user_email: str,
     admin_users: list[str],
     allowed_users: list[str],
+    owner_email: str = "",
+    owner_display_name: str = "",
 ) -> Literal["admin", "member", "unknown"]:
-    """Return the role of a user based on config lists.
+    """Return the role of a user based on config lists and bot runner identity.
+
+    The bot runner (authenticated teams-cli user) is always admin regardless of
+    config lists. Email matching is tried first; display name is used as fallback
+    for chats (e.g. 48:notes) where the sender email may not be available.
 
     Returns:
-        "admin"   — user is in admin_users (full access)
+        "admin"   — user is bot runner or in admin_users (full access)
         "member"  — user is in allowed_users only (chat/reply only)
         "unknown" — user is in neither list (messages should be ignored)
     """
+    # Bot runner is always admin — match by email first, then by display name
+    if owner_email and user_email == owner_email:
+        return "admin"
+    if owner_display_name and user_email == owner_display_name:
+        return "admin"
     if user_email in admin_users:
         return "admin"
     if user_email in allowed_users:
@@ -64,6 +75,8 @@ async def handle_message(
         user_email,
         admin_users=bot._config.security.admin_users,
         allowed_users=bot._config.security.allowed_users,
+        owner_email=getattr(bot, "_owner_email", ""),
+        owner_display_name=getattr(bot, "_owner_display_name", ""),
     )
     is_admin = role == "admin"
 
@@ -215,7 +228,14 @@ async def handle_resume(
 
     # Ownership/admin check: only the session owner or admins can resume
     is_owner = session.get("created_by") == user_email
-    is_admin = user_email in bot._config.security.admin_users
+    resume_role = get_user_role(
+        user_email,
+        admin_users=bot._config.security.admin_users,
+        allowed_users=bot._config.security.allowed_users,
+        owner_email=getattr(bot, "_owner_email", ""),
+        owner_display_name=getattr(bot, "_owner_display_name", ""),
+    )
+    is_admin = resume_role == "admin"
     if not (is_owner or is_admin):
         await bot._responder.send_text(
             chat_id,

@@ -59,6 +59,11 @@ class NiumaBot:
         self._responder = Responder(bot_name=self._config.bot.name)
         self._manager_chat_id: Optional[str] = None
 
+        # Auto-detect owner: whoever runs the bot is always admin
+        self._owner_email: str = ""
+        self._owner_display_name: str = ""
+        await self._detect_owner()
+
         # Optimization 1: Resume Manager session from DB if one was saved
         await self._manager.load_state()
 
@@ -67,6 +72,47 @@ class NiumaBot:
         if saved_chat:
             self._manager_chat_id = saved_chat
             logger.info("Resumed Manager chat from DB: %s", saved_chat[:30])
+
+    async def _detect_owner(self) -> None:
+        """Detect the authenticated teams-cli user and store as owner.
+
+        Runs 'teams-cli auth status --json' to get the username (email), then
+        calls the Graph API /me endpoint to get the displayName as a fallback
+        for chats (e.g. 48:notes) that surface displayName instead of email.
+
+        Failures are non-fatal — the bot falls back to config-only admin lists.
+        """
+        import json as _json
+        import subprocess
+
+        # Step 1: Get owner email from teams-cli auth status
+        try:
+            result = await asyncio.to_thread(
+                subprocess.run,
+                ["teams-cli", "auth", "status", "--json"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                auth_data = _json.loads(result.stdout)
+                username = auth_data.get("username", "")
+                if username:
+                    self._owner_email = username
+                    logger.info("Auto-detected owner email from teams-cli: %s", username)
+        except Exception as exc:
+            logger.warning("Could not detect owner from teams-cli auth status: %s", exc)
+
+        # Step 2: Get owner displayName from Graph API /me (for 48:notes chats)
+        try:
+            from niuma.teams_api import _get_me_sync
+            me = await asyncio.to_thread(_get_me_sync)
+            display_name = me.get("displayName", "")
+            if display_name:
+                self._owner_display_name = display_name
+                logger.info("Auto-detected owner displayName from Graph API: %s", display_name)
+        except Exception as exc:
+            logger.warning("Could not detect owner displayName from Graph API: %s", exc)
 
     async def _ensure_manager_chat(self) -> str:
         """Create or retrieve the Manager's dedicated chat group.
