@@ -359,6 +359,17 @@ class Database:
         )
         return [dict(r) for r in await cursor.fetchall()]
 
+    async def cleanup_expired_sessions(self, max_age_seconds: int = 86400 * 7) -> int:
+        """Mark sessions older than max_age as expired. Returns count of expired sessions."""
+        cutoff = time.time() - max_age_seconds
+        async with self._conn.execute(
+            "UPDATE sessions SET status = 'expired' WHERE status IN ('completed', 'failed') AND created_at < ?",
+            (cutoff,),
+        ) as cursor:
+            count = cursor.rowcount
+        await self._conn.commit()
+        return count
+
     async def _get_row(self, row_id: str) -> Optional[aiosqlite.Row]:
         cursor = await self._conn.execute(
             "SELECT * FROM sessions WHERE id = ?", (row_id,)

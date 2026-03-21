@@ -105,7 +105,7 @@ async def watch_session(
     max_wait = bot._config.claude.session_timeout + 60
     elapsed = 0
     poll_interval = 2
-    heartbeat_interval = 120  # Send progress update every 2 minutes
+    heartbeat_interval = 60  # Send progress update every 1 minute
     last_heartbeat = 0
     while elapsed < max_wait:
         await asyncio.sleep(poll_interval)

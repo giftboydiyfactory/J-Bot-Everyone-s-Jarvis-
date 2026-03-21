@@ -213,6 +213,28 @@ class SessionManager:
                 logger.info("Session %s completed", session_id)
             else:
                 error = stderr.decode().strip()
+                # Retry once for transient errors
+                retryable = any(kw in error.lower() for kw in ["timeout", "network", "token", "expired", "econnreset", "connection"])
+                if retryable and not getattr(self, f'_retried_{session_id}', False):
+                    setattr(self, f'_retried_{session_id}', True)
+                    logger.warning("Session %s failed with retryable error, retrying once: %s", session_id, error[:100])
+                    # Re-run via resume
+                    session = await self._db.get_session(session_id)
+                    claude_sid = session.get("claude_session", "") if session else ""
+                    if claude_sid:
+                        retry_proc = await asyncio.create_subprocess_exec(
+                            *_claude_command(), "-p", "continue from where you left off",
+                            "--resume", claude_sid,
+                            "--output-format", "json",
+                            "--permission-mode", self._config.permission_mode,
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.PIPE,
+                            cwd=session.get("cwd") or self._config.default_cwd,
+                        )
+                        self._active[session_id] = retry_proc
+                        # Recurse (only once due to flag)
+                        await self._wait_for_completion(session_id, retry_proc)
+                        return
                 await self._db.update_session(
                     session_id, status="failed", last_output=error[:5000]
                 )
@@ -238,3 +260,8 @@ class SessionManager:
     def _cleanup(self, session_id: str) -> None:
         self._active.pop(session_id, None)
         self._tasks.pop(session_id, None)
+        # Clean up retry flag
+        try:
+            delattr(self, f'_retried_{session_id}')
+        except AttributeError:
+            pass
