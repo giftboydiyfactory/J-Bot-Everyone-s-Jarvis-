@@ -69,8 +69,10 @@ Return a JSON object with ONE of these actions:
 1. {"action": "reply", "reply_text": "your answer"}
    ONLY for trivial questions (math, greetings) that need no tools whatsoever.
 
-2. {"action": "new", "prompt": "task description", "cwd": "/path", "dedicated_chat": true/false}
+2. {"action": "new", "prompt": "task description", "dedicated_chat": true/false}
    Delegate a new task. Set dedicated_chat=true for complex tasks with lots of output.
+   Do NOT include "cwd" unless the user explicitly provides an exact path.
+   Workers default to ~ and can navigate the filesystem themselves.
 
 3. {"action": "resume", "session_id": "XXXX", "prompt": "follow-up instructions"}
    Send follow-up to an existing worker
