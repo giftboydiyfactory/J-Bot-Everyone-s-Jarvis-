@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 from niuma.config import ClaudeConfig
+from niuma.session import _claude_command
 
 if TYPE_CHECKING:
     from niuma.db import Database
@@ -182,10 +183,11 @@ class Manager:
         """
         prompt = self._build_prompt(user_message, user_email, context)
 
+        claude_cmd = _claude_command()
         if self._session_id:
             # Resume existing Manager session
             proc = await asyncio.create_subprocess_exec(
-                "claude", "-p", prompt,
+                *claude_cmd, "-p", prompt,
                 "--resume", self._session_id,
                 "--json-schema", _MANAGER_SCHEMA,
                 "--output-format", "json",
@@ -196,7 +198,7 @@ class Manager:
         else:
             # First call: create new Manager session
             proc = await asyncio.create_subprocess_exec(
-                "claude", "-p", prompt,
+                *claude_cmd, "-p", prompt,
                 "--model", self._config.dispatcher_model,
                 "--json-schema", _MANAGER_SCHEMA,
                 "--system-prompt", _MANAGER_SYSTEM_PROMPT,
