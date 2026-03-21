@@ -182,8 +182,9 @@ async def handle_new(
         bot._fire_and_track(
             bot._watch_session(output_chat, sid, reply_to="" if session_chat_id else reply_to)
         )
-    except RuntimeError as e:
-        await bot._responder.send_text(chat_id, str(e), reply_to=reply_to)
+    except Exception as e:
+        logger.exception("Failed to start session")
+        await bot._responder.send_text(chat_id, f"Failed to start session: {e}", reply_to=reply_to)
 
 
 async def handle_resume(

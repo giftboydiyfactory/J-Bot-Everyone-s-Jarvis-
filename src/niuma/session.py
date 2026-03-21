@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import Any, Optional
 
 from niuma.config import ClaudeConfig
@@ -72,6 +73,9 @@ class SessionManager:
             )
 
         work_dir = cwd or self._config.default_cwd
+        if not os.path.isdir(work_dir):
+            logger.warning("cwd %s does not exist, falling back to %s", work_dir, self._config.default_cwd)
+            work_dir = self._config.default_cwd
         work_model = model or self._config.worker_model
 
         session = await self._db.create_session(
