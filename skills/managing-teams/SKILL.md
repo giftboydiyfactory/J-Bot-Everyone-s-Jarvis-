@@ -1,6 +1,6 @@
 ---
 name: managing-teams
-description: "Manage Microsoft Teams chats, channels, and group chats via teams-cli and Graph API. Create group chats, send messages, manage members, update topics, browse teams/channels. Use when working with Teams messages, creating chats, or managing Teams interactions."
+description: "This skill should be used when the user asks to read Teams messages, list Teams chats, send a Teams message, create a group chat, add or remove members from a chat, update a chat topic, list teams or channels, read channel messages, or open a chat in Teams. Covers teams-cli commands and direct Graph API calls for Microsoft Teams operations."
 ---
 
 # Teams Chat & Channel Management
@@ -9,7 +9,7 @@ Manage Microsoft Teams chats and channels via `teams-cli` and direct Graph API c
 
 ## Status: Active
 
-`teams-cli` v0.46.2 is installed and authenticated.
+`teams-cli` is installed and authenticated.
 
 ## Verify Installation
 
