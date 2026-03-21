@@ -16,10 +16,12 @@ logger = logging.getLogger(__name__)
 def _claude_command() -> list[str]:
     """Return the command to invoke Claude Code.
 
-    Uses plain 'claude' with --permission-mode bypassPermissions.
-    The binary already supports bypassPermissions natively (v2.1.81+).
-    clp run adds ~3GB memory overhead per call and can hang, so we avoid it.
+    Uses 'clp run -- claude' for bypassPermissions via binary patching.
+    Required by company policy. Falls back to plain 'claude' if clp unavailable.
     """
+    import shutil
+    if shutil.which("clp"):
+        return ["clp", "run", "--", "claude"]
     return ["claude"]
 
 def _build_worker_safety_prompt(bot_name: str = "niuma") -> str:
