@@ -104,7 +104,7 @@ def load_config(path: Path) -> NiumaConfig:
     if session_timeout < 60:
         raise ConfigError("claude.session_timeout must be >= 60 seconds")
 
-    bot_name = bot_raw.get("name", "niuma")
+    bot_name = bot_raw.get("name", "jbot")
     bot_trigger = bot_raw.get("trigger", f"@{bot_name}")
     bot_emoji = bot_raw.get("emoji", "🐴")
 

@@ -1,5 +1,5 @@
 # src/niuma/handler.py
-"""Message handling and dispatch routing for niuma-bot.
+"""Message handling and dispatch routing for J-Bot.
 
 Extracted from main.py for better separation of concerns.
 NiumaBot delegates all inbound-message logic here.

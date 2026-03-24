@@ -1,5 +1,5 @@
 #!/bin/bash
-# niuma-bot FULL RESET: clear all state and start fresh
+# J-Bot FULL RESET: clear all state and start fresh
 # Use this only when you want a completely new Manager session and chat.
 set -euo pipefail
 
@@ -7,7 +7,7 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="$REPO_DIR/.venv"
 DB="$HOME/.niuma/niuma.db"
 
-echo "🐴 niuma-bot: FULL RESET..."
+echo "🤖 J-Bot: FULL RESET..."
 
 # 1. Kill all existing niuma processes
 echo "  [1/4] Killing old processes..."
@@ -53,5 +53,5 @@ echo "  [4/4] Starting daemon..."
 niuma --daemon
 
 echo ""
-echo "⚠️  niuma-bot started with FRESH state. New Manager session and chat will be created."
+echo "⚠️  J-Bot started with FRESH state. New Manager session and chat will be created."
 echo "   Logs: tail -f ~/.niuma/niuma.log"

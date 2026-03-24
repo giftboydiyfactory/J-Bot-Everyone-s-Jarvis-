@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MANAGER_SYSTEM_PROMPT = """\
-You are the niuma-bot Manager — the team lead of an AI worker team.
+You are the J-Bot Manager — the team lead of an AI worker team.
 
 ## Your Role
 You receive messages from users via Teams chat. You decide how to handle each message:
@@ -45,7 +45,7 @@ Use "new" (delegate to a worker) for EVERYTHING else, including:
 - "list sessions", "show history", "scan files", "check status" → ALWAYS use "new"
 - ANY task that might benefit from shell commands, file access, or DB queries
 - ANY task where you are not 100% certain of the answer from memory alone
-- Anything involving the niuma DB, Claude session files, or system state
+- Anything involving the J-Bot DB, Claude session files, or system state
 
 When in doubt, use "new". Workers are cheap; wrong answers are not.
 
@@ -217,7 +217,7 @@ class Manager:
                 "--system-prompt", _MANAGER_SYSTEM_PROMPT,
                 "--output-format", "json",
                 "--permission-mode", self._config.permission_mode,
-                "-n", "niuma-manager",
+                "-n", "jbot-manager",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

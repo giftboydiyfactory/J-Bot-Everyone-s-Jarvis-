@@ -209,7 +209,7 @@ class NiumaBot:
         """Main polling loop."""
         self._running = True
         logger.info(
-            "niuma-bot started, polling every %ds",
+            "J-Bot started, polling every %ds",
             self._config.teams.poll_interval,
         )
 
@@ -516,7 +516,7 @@ def _setup_logging(config: NiumaConfig) -> None:
 
 def cli_entry() -> None:
     parser = argparse.ArgumentParser(
-        description="niuma-bot: Teams chat bot powered by Claude Code"
+        description="J-Bot (Everyone's Jarvis): Teams chat bot powered by Claude Code"
     )
     parser.add_argument(
         "-c", "--config",

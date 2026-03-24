@@ -1,15 +1,15 @@
-# niuma-bot configuration
+# J-Bot (Everyone's Jarvis) configuration
 # Copy to ~/.niuma/config.yaml and edit
 
 bot:
-  name: "niuma"
-  trigger: "@niuma"
-  emoji: "🐴"
+  name: "jbot"
+  trigger: "@jbot"
+  emoji: "🤖"
 
 teams:
   chat_ids:
     - "19:your-chat-id@thread.v2"
-  trigger: "@niuma"
+  trigger: "@jbot"
   poll_interval: 60  # seconds
 
 claude:

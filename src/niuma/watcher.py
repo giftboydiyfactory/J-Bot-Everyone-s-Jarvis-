@@ -1,5 +1,5 @@
 # src/niuma/watcher.py
-"""Session watching logic for niuma-bot.
+"""Session watching logic for J-Bot.
 
 Extracted from main.py. Polls DB until a worker session finishes,
 then sends the result to Teams and feeds it back to the Manager.
