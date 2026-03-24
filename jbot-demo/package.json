@@ -1,11 +1,11 @@
 {
-  "name": "niuma-demo",
+  "name": "jbot-demo",
   "version": "1.0.0",
-  "description": "Niuma Bot Demo Video",
+  "description": "J-Bot Demo Video",
   "scripts": {
     "start": "npx remotion studio src/index.ts",
-    "build": "npx remotion render src/index.ts NiumaBotDemo --output out/niuma-demo.mp4",
-    "render": "npx remotion render src/index.ts NiumaBotDemo --output out/niuma-demo.mp4"
+    "build": "npx remotion render src/index.ts JBotDemo --output out/jbot-demo.mp4",
+    "render": "npx remotion render src/index.ts JBotDemo --output out/jbot-demo.mp4"
   },
   "keywords": [],
   "author": "Jackey Wang",

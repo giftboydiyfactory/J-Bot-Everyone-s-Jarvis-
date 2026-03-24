@@ -184,7 +184,7 @@ export const LiveDemoScene: React.FC = () => {
             Session Status
           </div>
 
-          {/* Worker status card */}
+          {/* Session status card */}
           <div
             style={{
               backgroundColor: "rgba(26,26,46,0.9)",

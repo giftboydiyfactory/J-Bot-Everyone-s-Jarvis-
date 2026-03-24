@@ -86,7 +86,7 @@ export const WorkerProgressScene: React.FC = () => {
     },
   ];
 
-  // Teams chat messages during worker run
+  // Teams chat messages during session run
   const chatMessages: MessageData[] = [
     {
       id: "1",

@@ -10,6 +10,6 @@ build/
 .coverage
 htmlcov/
 .pytest_cache/
-niuma-demo/node_modules/
-niuma-demo/.remotion/
+jbot-demo/node_modules/
+jbot-demo/.remotion/
 .DS_Store

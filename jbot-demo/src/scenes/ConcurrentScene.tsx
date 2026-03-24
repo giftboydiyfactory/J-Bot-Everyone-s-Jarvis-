@@ -136,7 +136,7 @@ export const ConcurrentScene: React.FC = () => {
     },
   ];
 
-  // Worker status cards
+  // Task session cards
   const workerCards = [
     {
       id: "0324-a7f3",
@@ -196,7 +196,7 @@ export const ConcurrentScene: React.FC = () => {
         SCENE 4 — CONCURRENT TASKS
       </div>
 
-      {/* Worker count badge */}
+      {/* Session count badge */}
       <div
         style={{
           position: "absolute",
@@ -252,7 +252,7 @@ export const ConcurrentScene: React.FC = () => {
           />
         </div>
 
-        {/* Right panel: Worker status cards */}
+        {/* Right panel: Task session cards */}
         <div
           style={{
             flex: 1,
