@@ -13,7 +13,7 @@ export const MultiUserScene: React.FC = () => {
   // Message frames
   const F = [0, 50, 100, 130, 160, 210, 260, 310];
 
-  // Concurrent workers visual - pulsing
+  // Concurrent sessions visual - pulsing
   const workerPulse = 0.6 + 0.4 * Math.abs(Math.sin(frame * 0.08));
   const worker2Pulse = 0.6 + 0.4 * Math.abs(Math.sin(frame * 0.08 + 1.5));
 
@@ -77,7 +77,7 @@ export const MultiUserScene: React.FC = () => {
               />
             )}
 
-            {/* Niuma acknowledges Alice */}
+            {/* J-Bot acknowledges Alice */}
             {frame >= F[2] && (
               <TeamsChatMessage
                 avatar="🤖"
@@ -90,7 +90,7 @@ export const MultiUserScene: React.FC = () => {
               />
             )}
 
-            {/* Niuma acknowledges Bob */}
+            {/* J-Bot acknowledges Bob */}
             {frame >= F[3] && (
               <TeamsChatMessage
                 avatar="🤖"
@@ -144,7 +144,7 @@ export const MultiUserScene: React.FC = () => {
           </TeamsChat>
         </div>
 
-        {/* Parallel workers visualization */}
+        {/* Parallel sessions visualization */}
         <div
           style={{
             width: 360,
@@ -165,7 +165,7 @@ export const MultiUserScene: React.FC = () => {
             Parallel Sessions
           </div>
 
-          {/* Worker 1 - Alice */}
+          {/* Session 1 - Alice */}
           <div
             style={{
               backgroundColor: "rgba(26,26,46,0.9)",
@@ -215,7 +215,7 @@ export const MultiUserScene: React.FC = () => {
             </div>
           </div>
 
-          {/* Worker 2 - Bob */}
+          {/* Session 2 - Bob */}
           <div
             style={{
               backgroundColor: "rgba(26,26,46,0.9)",

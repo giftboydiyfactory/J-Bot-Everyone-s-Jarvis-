@@ -49,7 +49,7 @@ export const RemotionRoot: React.FC = () => {
   return (
     <>
       <Composition
-        id="NiumaBotDemo"
+        id="JBotDemo"
         component={NiumaBotDemo}
         durationInFrames={TOTAL_FRAMES}
         fps={FPS}
