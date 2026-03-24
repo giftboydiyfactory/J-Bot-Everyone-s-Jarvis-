@@ -12,7 +12,7 @@ from niuma.config import ClaudeConfig
 logger = logging.getLogger(__name__)
 
 _DISPATCHER_SYSTEM_PROMPT = """\
-You are the niuma-bot dispatcher. Your ONLY job is to route user messages to one of THREE actions.
+You are the J-Bot dispatcher. Your ONLY job is to route user messages to one of THREE actions.
 
 You receive:
 - The user's message
@@ -21,7 +21,7 @@ You receive:
 
 THREE possible actions:
 
-1. "reply" — The user asks a simple factual question you can answer directly WITHOUT running any code, tools, or commands. Examples: "what is 2+2", "what time is it", "explain what niuma-bot is".
+1. "reply" — The user asks a simple factual question you can answer directly WITHOUT running any code, tools, or commands. Examples: "what is 2+2", "what time is it", "explain what J-Bot is".
 
 2. "new" — The user wants ANYTHING that requires execution: running code, analyzing files, creating things, managing sessions, listing sessions, importing sessions, stopping sessions, scanning history, etc. Basically ANYTHING that is not a trivial factual question. The prompt should faithfully pass through the user's full request. Include cwd if the user mentions a path.
 

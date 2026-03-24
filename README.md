@@ -1,13 +1,13 @@
-# niuma-bot
+# J-Bot (Everyone's Jarvis)
 
-A Teams chat bot powered by Claude Code that monitors group chats for `@niuma` messages and routes them through a stateful **Manager** session that orchestrates Claude Code worker sessions.
+A Teams chat bot powered by Claude Code that monitors group chats for `@jbot` messages and routes them through a stateful **Manager** session that orchestrates Claude Code worker sessions.
 
 <!-- TODO (web-dashboard): A web dashboard for session monitoring is planned.
      It will provide real-time status, cost summaries, and worker logs via HTTP. -->
 
 ## Overview
 
-niuma-bot integrates Microsoft Teams with Claude Code to enable AI-powered task execution directly from Teams chat. When a user mentions `@niuma` in a Teams chat, the bot:
+J-Bot integrates Microsoft Teams with Claude Code to enable AI-powered task execution directly from Teams chat. When a user mentions `@jbot` in a Teams chat, the bot:
 
 1. **Polls** Teams for new messages containing the trigger
 2. **Routes** the message to the stateful Manager Claude session
@@ -71,8 +71,8 @@ src/niuma/
 Clone the repository and install in development mode:
 
 ```bash
-git clone <repository-url>
-cd cyber_teams_niuma
+git clone https://github.com/giftboydiyfactory/J-Bot-Everyone-s-Jarvis-.git
+cd J-Bot-Everyone-s-Jarvis-
 pip install -e ".[dev]"
 ```
 
@@ -111,10 +111,15 @@ Open `~/.niuma/config.yaml` and update:
 Example minimal config:
 
 ```yaml
+bot:
+  name: "jbot"
+  trigger: "@jbot"
+  emoji: "🤖"
+
 teams:
   chat_ids:
     - "19:abc123@thread.v2"
-  trigger: "@niuma"
+  trigger: "@jbot"
   poll_interval: 60
 
 claude:
@@ -197,14 +202,14 @@ On `SIGTERM` or `SIGINT`, the bot:
 
 ## Usage in Teams
 
-Once running, use the bot in Teams by mentioning `@niuma` followed by your request:
+Once running, use the bot in Teams by mentioning `@jbot` followed by your request:
 
 | Command | Example | Behavior |
 |---------|---------|----------|
-| **New Task** | `@niuma create a Python script that prints "hello world"` | Manager delegates a new worker session |
-| **Resume Session** | `@niuma continue session 0320-a7f3` | Manager resumes an existing worker session |
-| **Ask Manager** | `@niuma what sessions are running?` | Manager answers from its memory |
-| **Quick Reply** | `@niuma what is 2+2?` | Manager answers directly (no worker created) |
+| **New Task** | `@jbot create a Python script that prints "hello world"` | Manager delegates a new worker session |
+| **Resume Session** | `@jbot continue session 0320-a7f3` | Manager resumes an existing worker session |
+| **Ask Manager** | `@jbot what sessions are running?` | Manager answers from its memory |
+| **Quick Reply** | `@jbot what is 2+2?` | Manager answers directly (no worker created) |
 
 The Manager analyzes each message and determines the appropriate action. Session results are posted back to the chat when complete.
 

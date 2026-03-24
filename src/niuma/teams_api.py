@@ -136,7 +136,7 @@ def create_session_chat(
     topic: str,
     user_email: str,
 ) -> dict[str, str]:
-    """Create a dedicated group chat for a niuma session (synchronous).
+    """Create a dedicated group chat for a J-Bot session (synchronous).
 
     Returns dict with 'chat_id' and 'web_url'.
     Call via asyncio.to_thread() from async contexts.

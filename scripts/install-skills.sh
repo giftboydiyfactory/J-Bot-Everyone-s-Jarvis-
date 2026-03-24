@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install niuma-bot skills into ~/.claude/skills/
+# Install J-Bot skills into ~/.claude/skills/
 # Run this after cloning the repo to set up skill auto-loading.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

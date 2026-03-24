@@ -1,5 +1,5 @@
 #!/bin/bash
-# Check for git updates and restart niuma-bot if needed
+# Check for git updates and restart J-Bot if needed
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -37,12 +37,12 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') [check] Reinstalling skills..."
 bash "$REPO_DIR/scripts/install-skills.sh"
 
 # Kill old niuma process
-echo "$(date '+%Y-%m-%d %H:%M:%S') [check] Stopping old niuma..."
+echo "$(date '+%Y-%m-%d %H:%M:%S') [check] Stopping old J-Bot..."
 pkill -f "niuma.main" 2>/dev/null || true
 sleep 2
 
 # Start new niuma
-echo "$(date '+%Y-%m-%d %H:%M:%S') [check] Starting niuma..."
+echo "$(date '+%Y-%m-%d %H:%M:%S') [check] Starting J-Bot..."
 source "$VENV/bin/activate"
 niuma --daemon
 

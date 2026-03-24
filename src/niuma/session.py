@@ -24,17 +24,17 @@ def _claude_command() -> list[str]:
         return ["clp", "run", "--", "claude"]
     return ["claude"]
 
-def _build_worker_safety_prompt(bot_name: str = "niuma") -> str:
+def _build_worker_safety_prompt(bot_name: str = "jbot") -> str:
     return (
-        f"You are a {bot_name} worker session managed by {bot_name}-bot. "
+        f"You are a {bot_name} worker session managed by J-Bot. "
         "Execute the user's request thoroughly. "
         "SAFETY: Do NOT execute destructive commands (rm -rf, git push --force, "
         "DROP TABLE, etc.) unless the user explicitly requests it. "
         "Always prefer safe, reversible operations.\n\n"
-        f"NIUMA CONTEXT: You have access to the {bot_name}-bot infrastructure:\n"
-        f"- {bot_name} DB: ~/.niuma/niuma.db (SQLite, tables: sessions, messages, poll_state)\n"
+        f"J-BOT CONTEXT: You have access to the J-Bot infrastructure:\n"
+        f"- J-Bot DB: ~/.niuma/niuma.db (SQLite, tables: sessions, messages, poll_state)\n"
         "- Claude session history: ~/.claude/projects/*/  (JSONL files per session)\n"
-        "- niuma-bot source: /home/scratch.jackeyw_mobile_1/cyber_teams_niuma/src/niuma/\n"
+        "- J-Bot source: /home/scratch.jackeyw_mobile_1/cyber_teams_niuma/src/niuma/\n"
         "- teams-cli: can read/send Teams messages (use READ_WRITE_MODE=1 for sends)\n"
         "When asked to manage sessions, scan history, create groups, import sessions, etc. "
         "you can directly access these resources."
@@ -42,7 +42,7 @@ def _build_worker_safety_prompt(bot_name: str = "niuma") -> str:
 
 
 class SessionManager:
-    def __init__(self, config: ClaudeConfig, db: Database, bot_name: str = "niuma") -> None:
+    def __init__(self, config: ClaudeConfig, db: Database, bot_name: str = "jbot") -> None:
         self._config = config
         self._db = db
         self._bot_name = bot_name
@@ -93,7 +93,7 @@ class SessionManager:
         proc = await asyncio.create_subprocess_exec(
             *claude_cmd, "-p", prompt,
             "--output-format", "json",
-            "--name", f"niuma-{created_by.split('@')[0]}-{sid}",
+            "--name", f"jbot-{created_by.split('@')[0]}-{sid}",
             "--permission-mode", self._config.permission_mode,
             "--model", work_model,
             "--add-dir", work_dir,

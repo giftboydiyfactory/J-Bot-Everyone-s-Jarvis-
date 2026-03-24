@@ -11,7 +11,7 @@ import markdown
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_BOT_NAME = "niuma"
+_DEFAULT_BOT_NAME = "jbot"
 _MAX_BODY_LEN = 2000
 
 
