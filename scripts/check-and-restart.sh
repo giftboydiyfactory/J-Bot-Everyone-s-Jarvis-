@@ -41,7 +41,7 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') [check] Stopping old J-Bot..."
 pkill -f "niuma.main" 2>/dev/null || true
 sleep 2
 
-# Start new niuma
+# Start new J-Bot
 echo "$(date '+%Y-%m-%d %H:%M:%S') [check] Starting J-Bot..."
 source "$VENV/bin/activate"
 niuma --daemon

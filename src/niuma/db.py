@@ -317,7 +317,7 @@ class Database:
         cwd: str,
         status: str = "completed",
     ) -> dict[str, Any]:
-        """Import an external Claude session into niuma DB."""
+        """Import an external Claude session into J-Bot DB."""
         # Check if already imported
         existing = await self.get_session_by_claude_id(claude_session)
         if existing:

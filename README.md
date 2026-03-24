@@ -43,8 +43,8 @@ Workers are Claude Code sessions spawned by the Manager's instructions:
 ### Module Layout
 
 ```
-src/niuma/
-  main.py       — CLI entry point and NiumaBot lifecycle (coordinator)
+src/niuma/   (internal package name)
+  main.py       — CLI entry point and J-Bot lifecycle (coordinator)
   handler.py    — Inbound message routing and dispatch logic
   watcher.py    — Session watching: polls DB until worker finishes, sends result
   manager.py    — Stateful Manager session (the team lead)
