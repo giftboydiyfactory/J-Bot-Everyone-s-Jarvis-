@@ -34,7 +34,7 @@ def _build_worker_safety_prompt(bot_name: str = "jbot") -> str:
         f"J-BOT CONTEXT: You have access to the J-Bot infrastructure:\n"
         f"- J-Bot DB: ~/.niuma/niuma.db (SQLite, tables: sessions, messages, poll_state)\n"
         "- Claude session history: ~/.claude/projects/*/  (JSONL files per session)\n"
-        "- J-Bot source: /home/scratch.jackeyw_mobile_1/cyber_teams_niuma/src/niuma/\n"
+        "- J-Bot source: the J-Bot source directory (wherever you cloned the repo)\n"
         "- teams-cli: can read/send Teams messages (use READ_WRITE_MODE=1 for sends)\n"
         "When asked to manage sessions, scan history, create groups, import sessions, etc. "
         "you can directly access these resources."

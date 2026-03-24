@@ -263,11 +263,11 @@ class NiumaBot:
         reply_only_from_db = {cid for cid, mode in watched_ids.items() if mode == "reply_only"}
         self._dynamic_reply_only = reply_only_from_config | reply_only_from_db
 
-        # Poll configured trigger chats (@niuma required)
+        # Poll configured trigger chats (trigger prefix required)
         for chat_id in all_trigger_chats:
             await self._poll_chat(chat_id)
 
-        # Poll manager chat (no @niuma needed, direct conversation)
+        # Poll manager chat (no trigger needed, direct conversation)
         if self._manager_chat_id:
             await self._poll_manager_chat(self._manager_chat_id)
 

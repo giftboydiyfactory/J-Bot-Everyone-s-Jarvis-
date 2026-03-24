@@ -1,0 +1,22 @@
+{
+  "name": "niuma-demo",
+  "version": "1.0.0",
+  "description": "Niuma Bot Demo Video",
+  "scripts": {
+    "start": "npx remotion studio src/index.ts",
+    "build": "npx remotion render src/index.ts NiumaBotDemo --output out/niuma-demo.mp4",
+    "render": "npx remotion render src/index.ts NiumaBotDemo --output out/niuma-demo.mp4"
+  },
+  "keywords": [],
+  "author": "Jackey Wang",
+  "license": "ISC",
+  "dependencies": {
+    "@remotion/cli": "^4.0.438",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "remotion": "^4.0.438",
+    "typescript": "^6.0.2"
+  }
+}
