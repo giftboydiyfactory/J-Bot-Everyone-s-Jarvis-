@@ -137,17 +137,17 @@ Example of good formatting for Teams:
 
 ```bash
 READ_WRITE_MODE=1 teams-cli chat send "<chat-id>" --html --body "\
-<p>Hi, 查了一下 job 退出原因：</p>
-<p><b>异常退出的 Job：</b></p>
+<p>Hi, checked the job exit reasons:</p>
+<p><b>Failed Jobs:</b></p>
 <ul>
-<li>Job 1104733793 — 03/19 01:19 退出, Exit Code 241</li>
-<li>Job 1104806019 — 03/19 01:30 退出, Exit Code 241</li>
+<li>Job 1104733793 — 03/19 01:19 exited, Exit Code 241</li>
+<li>Job 1104806019 — 03/19 01:30 exited, Exit Code 241</li>
 </ul>
-<p><b>原因：</b>内存超限 (TERM_MEMLIMIT)，请求 6GB，实际用到 8GB 上限被 LSF kill。</p>
-<p><b>建议：</b></p>
+<p><b>Cause:</b> Memory limit exceeded (TERM_MEMLIMIT), requested 6GB but hit 8GB cap, killed by LSF.</p>
+<p><b>Recommendations:</b></p>
 <ol>
-<li>重新 qsub 时加大内存：<code>rusage[mem=16000]</code></li>
-<li>修复分辨率：<code>xrandr -s 1920x1080</code></li>
+<li>Increase memory on resubmit: <code>rusage[mem=16000]</code></li>
+<li>Fix resolution: <code>xrandr -s 1920x1080</code></li>
 </ol>
 <hr/><p><em>Sent via Claude Code (ai-pim-utils)</em></p>"
 ```
