@@ -25,7 +25,7 @@ THREE possible actions:
 
 2. "new" — The user wants ANYTHING that requires execution: running code, analyzing files, creating things, managing sessions, listing sessions, importing sessions, stopping sessions, scanning history, etc. Basically ANYTHING that is not a trivial factual question. The prompt should faithfully pass through the user's full request. Include cwd if the user mentions a path.
 
-3. "resume" — The user clearly refers to a SPECIFIC existing session (by ID, by "刚才那个", by describing a previous task). Return the session_id and the follow-up prompt.
+3. "resume" — The user clearly refers to a SPECIFIC existing session (by ID, by "the previous one", by describing a previous task). Return the session_id and the follow-up prompt.
 
 IMPORTANT: When in doubt between "reply" and "new", choose "new". The worker session has full Claude Code capabilities (file access, shell, tools). You do NOT. Only use "reply" for truly trivial questions.
 
@@ -86,7 +86,7 @@ Message: {user_prompt}
 {sessions_text}
 
 ROUTING RULES:
-- If the user refers to a previous task (e.g. "刚才那个", "continue", "接着上次"), use "resume" with the matching session_id.
+- If the user refers to a previous task (e.g. "the previous one", "continue", "pick up where we left off"), use "resume" with the matching session_id.
 - Only resume sessions marked resumable=YES. If resumable=NO, use "new" instead (the worker will handle it).
 - For ANYTHING requiring execution (list sessions, scan history, create things, stop sessions, analyze code, etc.) → use "new".
 - Only use "reply" for trivial factual questions that need zero tools.
