@@ -20,8 +20,8 @@ def _make_signature(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") 
     return ""
 
 
-# Hidden marker so bot can identify its own messages during polling
-_BOT_MARKER = "<!-- jbot -->"
+# Hidden marker appended to all bot messages — detected via raw HTML in poller
+_BOT_MARKER = "<!-- jbot-msg -->"
 
 
 def _make_prefix(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> str:
