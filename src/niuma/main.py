@@ -208,10 +208,10 @@ class NiumaBot:
     async def run(self) -> None:
         """Main polling loop."""
         self._running = True
-        logger.info(
-            "J-Bot started, polling every %ds",
-            self._config.teams.poll_interval,
-        )
+        self._poll_interval = 5  # Start fast (5s), ramp up to max if idle
+        self._poll_max = self._config.teams.poll_interval or 60
+        self._idle_cycles = 0
+        logger.info("J-Bot started, adaptive polling 5s→%ds", self._poll_max)
 
         # Create manager's dedicated chat on startup
         await self._ensure_manager_chat()
@@ -226,10 +226,20 @@ class NiumaBot:
 
         while self._running:
             try:
-                await self.poll_once()
+                had_activity = await self.poll_once()
+                if had_activity:
+                    self._poll_interval = 5  # Reset to fast polling on activity
+                    self._idle_cycles = 0
+                else:
+                    self._idle_cycles += 1
+                    # Ramp up: 5→10→15→20→30→45→60
+                    if self._idle_cycles > 3:
+                        self._poll_interval = min(
+                            self._poll_interval + 5, self._poll_max
+                        )
             except Exception:
                 logger.exception("Error in poll cycle")
-            await asyncio.sleep(self._config.teams.poll_interval)
+            await asyncio.sleep(self._poll_interval)
 
     async def _check_config_reload(self) -> None:
         """Reload config if the file has been modified."""
@@ -248,8 +258,9 @@ class NiumaBot:
         except Exception:
             pass  # Non-fatal
 
-    async def poll_once(self) -> None:
-        """Single poll cycle across all configured chats + manager chat + session chats."""
+    async def poll_once(self) -> bool:
+        """Single poll cycle. Returns True if any user message was processed."""
+        self._had_activity = False
         await self._check_config_reload()
         # Merge config chat_ids with dynamically watched chats from DB
         watched = await self._db.list_watched_chats()
@@ -276,6 +287,8 @@ class NiumaBot:
             session_chat_ids = await self._db.list_session_chat_ids()
             for chat_id in session_chat_ids:
                 await self._poll_session_chat(chat_id)
+
+        return self._had_activity
 
     async def _poll_chat(self, chat_id: str) -> None:
         from niuma.poller import TeamsCliError
@@ -403,6 +416,7 @@ class NiumaBot:
             # Auto-resume the bound session
             sid = session["id"]
             logger.info("Session chat %s: routing to session [%s]", chat_id[:20], sid)
+            self._had_activity = True
 
             # Check if session is currently running — queue message for later
             current = await self._session_mgr.get_result(sid)
@@ -482,6 +496,7 @@ class NiumaBot:
         message_id: str = "",
     ) -> None:
         """Delegate to handler module for message routing."""
+        self._had_activity = True
         from niuma.handler import handle_message
         await handle_message(self, chat_id, user_email, prompt, message_id)
 
