@@ -50,7 +50,7 @@ def _load_skills() -> str:
 _CACHED_SKILLS = _load_skills()
 
 
-def _build_worker_safety_prompt(bot_name: str = "jbot") -> str:
+def _build_worker_safety_prompt(bot_name: str = "jbot", chat_id: str = "") -> str:
     prompt = (
         f"You are a {bot_name} task session managed by J-Bot. "
         "Execute the user's request thoroughly. "
@@ -63,8 +63,22 @@ def _build_worker_safety_prompt(bot_name: str = "jbot") -> str:
         "- J-Bot source: the J-Bot source directory (wherever you cloned the repo)\n"
         "- teams-cli: can read/send Teams messages (use READ_WRITE_MODE=1 for sends)\n"
         "When asked to manage sessions, scan history, create groups, import sessions, etc. "
-        "you can directly access these resources."
+        "you can directly access these resources.\n\n"
     )
+
+    if chat_id:
+        prompt += (
+            "## Progress Reporting\n"
+            f"You can report progress directly to your Teams chat:\n"
+            f"  READ_WRITE_MODE=1 teams-cli chat send \"{chat_id}\" --html "
+            f"--body \"<p><b>【🤖J-Bot】</b> your message</p>"
+            f"<hr/><p><em>🤖 Sent by J-Bot</em></p>\"\n"
+            "Use this to send:\n"
+            "- Progress updates on long tasks (e.g. 'Scanning 500 files...')\n"
+            "- Intermediate findings before the final result\n"
+            "- The final result when you're done\n"
+            "Keep messages concise.\n\n"
+        )
 
     if _CACHED_SKILLS:
         prompt += f"\n\n# Available Skills (reference guides for tools)\n{_CACHED_SKILLS}"
