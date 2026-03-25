@@ -39,7 +39,10 @@ if [ -f "$NEW_DIR/config.yaml" ]; then
     sed -i '' 's|~/.niuma/niuma.db|~/.jbot/jbot.db|g' "$NEW_DIR/config.yaml"
     sed -i '' 's|~/.niuma/niuma.log|~/.jbot/jbot.log|g' "$NEW_DIR/config.yaml"
     sed -i '' 's|~/.niuma/|~/.jbot/|g' "$NEW_DIR/config.yaml"
-    echo "  Updated paths in config.yaml"
+    sed -i '' 's|name: "niuma"|name: "jbot"|g' "$NEW_DIR/config.yaml"
+    sed -i '' 's|trigger: "@niuma"|trigger: "@jbot"|g' "$NEW_DIR/config.yaml"
+    sed -i '' 's|emoji: "🐴"|emoji: "🤖"|g' "$NEW_DIR/config.yaml"
+    echo "  Updated paths and bot identity in config.yaml"
 fi
 
 echo ""

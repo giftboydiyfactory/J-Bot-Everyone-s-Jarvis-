@@ -15,8 +15,9 @@ _DEFAULT_BOT_NAME = "jbot"
 _MAX_BODY_LEN = 2000
 
 
-def _make_signature(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🐴") -> str:
-    return f"<hr/><p><em>{bot_emoji} Sent by {bot_name}-bot</em></p>"
+def _make_signature(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> str:
+    display_name = "J-Bot" if bot_name == "jbot" else bot_name
+    return f"<hr/><p><em>{bot_emoji} Sent by {display_name}</em></p>"
 
 
 def format_processing(session_id: str, bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🐴") -> str:
