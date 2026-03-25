@@ -366,12 +366,6 @@ class Database:
         row = await cursor.fetchone()
         return float(row["total"]) if row else 0.0
 
-    async def get_total_cost(self) -> float:
-        """Get total cost across all sessions."""
-        async with self._conn.execute("SELECT COALESCE(SUM(cost_usd), 0) FROM sessions") as cursor:
-            row = await cursor.fetchone()
-            return row[0] if row else 0.0
-
     async def get_session_costs(self, limit: int = 10) -> list[dict]:
         """Get recent sessions with their costs."""
         async with self._conn.execute(
