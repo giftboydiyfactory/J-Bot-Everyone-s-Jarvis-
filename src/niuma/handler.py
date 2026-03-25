@@ -88,7 +88,7 @@ async def handle_message(
 
     # Immediate acknowledgment so user knows we received the message
     await bot._responder.send_text(
-        chat_id, "🤖 Received — thinking...", reply_to=rt,
+        chat_id, "Received — thinking...", reply_to=rt,
     )
 
     decision = None

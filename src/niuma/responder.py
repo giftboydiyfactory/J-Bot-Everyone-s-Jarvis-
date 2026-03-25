@@ -17,7 +17,12 @@ _MAX_BODY_LEN = 2000
 
 def _make_signature(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> str:
     display_name = "J-Bot" if bot_name == "jbot" else bot_name
-    return f"<hr/><p><em>{bot_emoji} Sent by {display_name}</em></p>"
+    return ""
+
+
+def _make_prefix(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> str:
+    display_name = "J-Bot" if bot_name == "jbot" else bot_name
+    return f"【{bot_emoji}{display_name}】"
 
 
 def format_processing(session_id: str, bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🐴") -> str:
@@ -184,7 +189,7 @@ class Responder:
         self, chat_id: str, text: str,
         reply_to: Optional[str] = None,
     ) -> None:
+        prefix = _make_prefix(self._bot_name, self._bot_emoji)
         body_html = _md_to_html(text)
-        sig = _make_signature(self._bot_name, self._bot_emoji)
-        html = f"{body_html}{sig}"
+        html = f"<p><b>{prefix}</b> {body_html}</p>" if "<p>" not in body_html else body_html.replace("<p>", f"<p><b>{prefix}</b> ", 1)
         await self.send(chat_id, html, reply_to=reply_to)
