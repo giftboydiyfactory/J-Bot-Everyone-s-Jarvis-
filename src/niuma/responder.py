@@ -20,6 +20,10 @@ def _make_signature(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") 
     return ""
 
 
+# Hidden marker so bot can identify its own messages during polling
+_BOT_MARKER = "<!-- jbot -->"
+
+
 def _make_prefix(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> str:
     display_name = "J-Bot" if bot_name == "jbot" else bot_name
     return f"【{bot_emoji}{display_name}】"
@@ -143,6 +147,7 @@ class Responder:
         The reply_to parameter is accepted but currently unused — kept for future
         channel support.
         """
+        html_body = f"{html_body}{_BOT_MARKER}"
         env = {**os.environ, "READ_WRITE_MODE": "1"}
         proc = await asyncio.create_subprocess_exec(
             "teams-cli", "chat", "send", chat_id,
