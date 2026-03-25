@@ -92,6 +92,44 @@ def _parse_latest_activity(jsonl_path: Path) -> Optional[str]:
         return None
 
 
+def _find_progress_by_name(session_id: str) -> Optional[str]:
+    """Find session progress by scanning recent JSONL files for matching session name.
+
+    Workers are started with --name jbot-<user>-<session_id>, so we can find
+    the JSONL file by checking custom-title entries.
+    """
+    if not _CLAUDE_PROJECTS_DIR.exists():
+        return None
+
+    import os
+    now = __import__('time').time()
+
+    for project_dir in _CLAUDE_PROJECTS_DIR.iterdir():
+        if not project_dir.is_dir():
+            continue
+        for jsonl_path in project_dir.glob("*.jsonl"):
+            # Only check files modified in the last 30 minutes
+            try:
+                if now - os.path.getmtime(jsonl_path) > 1800:
+                    continue
+            except OSError:
+                continue
+
+            # Quick check: read first few lines for custom-title containing our session_id
+            try:
+                with open(jsonl_path, 'r') as f:
+                    # Read first 5 lines to find custom-title
+                    for i, line in enumerate(f):
+                        if i > 10:
+                            break
+                        if session_id in line and 'custom-title' in line:
+                            return _parse_latest_activity(jsonl_path)
+            except Exception:
+                continue
+
+    return None
+
+
 async def watch_session(
     bot: "NiumaBot",
     chat_id: str,
@@ -124,10 +162,19 @@ async def watch_session(
             claude_sid = session.get("claude_session", "")
             progress = _get_session_progress(claude_sid)
 
+            # If no JSONL progress, try finding by session name pattern
+            if not progress:
+                progress = _find_progress_by_name(session_id)
+
             if progress:
                 msg = f"⏳ session [{session_id}] ({minutes}m) — {progress}"
             else:
-                msg = f"⏳ session [{session_id}] still working... ({minutes}m elapsed)"
+                # Fallback: show task prompt summary
+                prompt_preview = (session.get("prompt") or "")[:80]
+                if prompt_preview:
+                    msg = f"⏳ session [{session_id}] ({minutes}m) — Working on: {prompt_preview}..."
+                else:
+                    msg = f"⏳ session [{session_id}] still working... ({minutes}m elapsed)"
 
             await bot._responder.send_text(chat_id, msg, reply_to=reply_to)
 
