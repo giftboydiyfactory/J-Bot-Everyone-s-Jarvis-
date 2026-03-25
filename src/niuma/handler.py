@@ -145,7 +145,9 @@ async def handle_message(
     elif decision.action == "resume":
         await handle_resume(bot, chat_id, decision, rt, user_email=user_email)
     elif decision.action in ("reply", "report"):
-        await bot._responder.send_text(chat_id, decision.reply_text or "", reply_to=rt)
+        reply_text = decision.reply_text or ""
+        if reply_text.strip():
+            await bot._responder.send_text(chat_id, reply_text, reply_to=rt)
     elif decision.action == "stop":
         await handle_stop(bot, chat_id, decision, rt)
 
