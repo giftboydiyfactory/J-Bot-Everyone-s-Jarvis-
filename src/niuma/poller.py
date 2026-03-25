@@ -20,6 +20,7 @@ class TeamsMessage:
     sender: str
     sender_email: str
     body: str
+    body_raw: str  # Original HTML before stripping — used for bot message detection
     timestamp: str
 
 
@@ -79,6 +80,7 @@ class Poller:
                 sender=from_user.get("displayName", "unknown"),
                 sender_email=email,
                 body=_strip_html(body_raw),
+                body_raw=body_raw,
                 timestamp=msg.get("createdDateTime", ""),
             ))
         return result
