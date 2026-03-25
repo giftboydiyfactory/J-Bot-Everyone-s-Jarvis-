@@ -27,11 +27,9 @@ def _teams_read_output(messages: list[dict]) -> bytes:
     }).encode()
 
 
-def _claude_manager_output(action: str, **kwargs) -> bytes:
-    inner = {"action": action, **kwargs}
+def _claude_manager_output(result: str = "") -> bytes:
     return json.dumps({
-        "result": "",
-        "structured_output": inner,
+        "result": result,
         "session_id": "manager-uuid",
         "total_cost_usd": 0.01,
     }).encode()
@@ -53,7 +51,7 @@ async def test_full_flow_new_session(bot: NiumaBot) -> None:
         _teams_read_output([{
             "id": "1742385601000",
             "from": {"user": {"displayName": "Jack", "email": "testuser@nvidia.com"}},
-            "body": {"content": "@niuma analyze this repo"},
+            "body": {"content": "@jbot analyze this repo"},
             "createdDateTime": "2026-03-19T10:00:00Z",
         }]),
         b"",
@@ -62,19 +60,10 @@ async def test_full_flow_new_session(bot: NiumaBot) -> None:
 
     manager_mock = AsyncMock()
     manager_mock.communicate = AsyncMock(return_value=(
-        _claude_manager_output("new", prompt="analyze this repo", cwd="/tmp"),
+        _claude_manager_output("Analyzed the repo. Found 2 performance issues."),
         b"",
     ))
     manager_mock.returncode = 0
-
-    worker_mock = AsyncMock()
-    worker_mock.communicate = AsyncMock(return_value=(
-        _claude_worker_output("Found 2 performance issues"),
-        b"",
-    ))
-    worker_mock.returncode = 0
-    worker_mock.pid = 12345
-    worker_mock.kill = MagicMock()
 
     teams_send_mock = AsyncMock()
     teams_send_mock.communicate = AsyncMock(return_value=(b'{"success":true}', b""))
@@ -88,10 +77,7 @@ async def test_full_flow_new_session(bot: NiumaBot) -> None:
             else:
                 return teams_send_mock
         elif cmd == "claude":
-            if "--json-schema" in args:
-                return manager_mock
-            else:
-                return worker_mock
+            return manager_mock
         return teams_read_mock
 
     # Pre-seed the poll state so the bot treats the message as new.

@@ -34,7 +34,7 @@ def test_parse_messages(poller: Poller) -> None:
         {
             "id": "msg-1",
             "from": {"user": {"displayName": "Jack", "email": "jack@nvidia.com"}},
-            "body": {"content": "@niuma analyze this code"},
+            "body": {"content": "@jbot analyze this code"},
             "createdDateTime": "2026-03-19T10:00:00Z",
         },
         {
@@ -52,11 +52,11 @@ def test_parse_messages(poller: Poller) -> None:
 def test_filter_triggered_messages(poller: Poller) -> None:
     messages = [
         TeamsMessage(id="1", sender="Jack", sender_email="j@n.com",
-                     body="@niuma do stuff", timestamp="t1"),
+                     body="@jbot do stuff", body_raw="", timestamp="t1"),
         TeamsMessage(id="2", sender="Alice", sender_email="a@n.com",
-                     body="normal chat", timestamp="t2"),
+                     body="normal chat", body_raw="", timestamp="t2"),
         TeamsMessage(id="3", sender="Bob", sender_email="b@n.com",
-                     body="@niuma help me", timestamp="t3"),
+                     body="@jbot help me", body_raw="", timestamp="t3"),
     ]
     triggered = poller.filter_triggered(messages)
     assert len(triggered) == 2
@@ -66,16 +66,16 @@ def test_filter_triggered_messages(poller: Poller) -> None:
 
 def test_extract_prompt(poller: Poller) -> None:
     msg = TeamsMessage(id="1", sender="Jack", sender_email="j@n.com",
-                       body="@niuma   analyze this code  ", timestamp="t1")
+                       body="@jbot   analyze this code  ", body_raw="", timestamp="t1")
     prompt = poller.extract_prompt(msg)
     assert prompt == "analyze this code"
 
 
 def test_filter_new_messages(poller: Poller) -> None:
     messages = [
-        TeamsMessage(id="1", sender="J", sender_email="j@n.com", body="@niuma a", timestamp="t"),
-        TeamsMessage(id="2", sender="J", sender_email="j@n.com", body="@niuma b", timestamp="t"),
-        TeamsMessage(id="3", sender="J", sender_email="j@n.com", body="@niuma c", timestamp="t"),
+        TeamsMessage(id="1", sender="J", sender_email="j@n.com", body="@jbot a", body_raw="", timestamp="t"),
+        TeamsMessage(id="2", sender="J", sender_email="j@n.com", body="@jbot b", body_raw="", timestamp="t"),
+        TeamsMessage(id="3", sender="J", sender_email="j@n.com", body="@jbot c", body_raw="", timestamp="t"),
     ]
     new = poller.filter_new(messages, last_seen_id="1")
     assert len(new) == 2
