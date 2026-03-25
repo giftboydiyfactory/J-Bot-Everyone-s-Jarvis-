@@ -48,8 +48,14 @@ while true; do
 done
 ' > /dev/null 2>&1 &
 
+# Wait for watchdog to write its PID
+for i in 1 2 3 4 5; do
+    [ -f "$PIDFILE" ] && break
+    sleep 1
+done
+
 echo ""
-echo "✅ J-Bot started with watchdog (PID: $(cat "$PIDFILE"))"
+echo "✅ J-Bot started with watchdog (PID: $(cat "$PIDFILE" 2>/dev/null || echo 'starting...'))"
 echo "   Auto-restarts on crash. Survives SSH disconnect."
 echo "   Logs:    tail -f ~/.niuma/niuma.log"
 echo "   Stop:    bash scripts/stop.sh"
