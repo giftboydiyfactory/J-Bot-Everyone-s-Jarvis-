@@ -29,6 +29,9 @@ else
     source "$VENV/bin/activate"
 fi
 
+# Auto-migrate from ~/.niuma/ if needed
+bash "$REPO_DIR/scripts/migrate.sh" 2>/dev/null || true
+
 mkdir -p "$HOME/.jbot"
 
 # 3. Start watchdog loop (nohup + background = survives SSH disconnect)
