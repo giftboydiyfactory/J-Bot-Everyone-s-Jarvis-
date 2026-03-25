@@ -85,6 +85,11 @@ async def handle_message(
     if not is_admin:
         effective_prompt = f"{prompt}\n\n[SYSTEM HINT] {_MEMBER_PERMISSION_HINT}"
 
+    # Immediate acknowledgment so user knows we received the message
+    await bot._responder.send_text(
+        chat_id, "🤖 Received — thinking...", reply_to=rt,
+    )
+
     try:
         decision = await bot._manager.decide(
             user_message=effective_prompt,
@@ -92,6 +97,9 @@ async def handle_message(
         )
     except Exception:
         logger.exception("Manager failed for message from %s", user_email)
+        await bot._responder.send_text(
+            chat_id, "❌ Sorry, I couldn't process that. Please try again.", reply_to=rt,
+        )
         return
 
     logger.info(
