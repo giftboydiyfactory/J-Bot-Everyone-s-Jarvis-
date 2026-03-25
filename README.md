@@ -83,8 +83,8 @@ pip install -e ".[dev]"
 Create the configuration directory and copy the example config:
 
 ```bash
-mkdir -p ~/.niuma
-cp config.yaml.example ~/.niuma/config.yaml
+mkdir -p ~/.jbot
+cp config.yaml.example ~/.jbot/config.yaml
 ```
 
 ### Get Chat ID
@@ -99,14 +99,14 @@ Look for the chat you want to monitor and copy the `id` field (format: `19:xxxxx
 
 ### Edit Configuration
 
-Open `~/.niuma/config.yaml` and update:
+Open `~/.jbot/config.yaml` and update:
 
 - **teams.chat_ids**: Add your chat IDs from the list above
 - **security.allowed_users**: Add email addresses of users who can trigger the bot
 - **security.admin_users**: Add email addresses of admin users (can list all sessions, stop others)
 - **claude.dispatcher_model**: Model for the Manager session (default: `sonnet`)
 - **claude.worker_model**: Model for executing tasks (default: `sonnet`)
-- **storage.db_path**: Path to SQLite database (default: `~/.niuma/niuma.db`)
+- **storage.db_path**: Path to SQLite database (default: `~/.jbot/jbot.db`)
 
 Example minimal config:
 
@@ -134,7 +134,7 @@ security:
     - "your.email@nvidia.com"
 
 storage:
-  db_path: "~/.niuma/niuma.db"
+  db_path: "~/.jbot/jbot.db"
 ```
 
 ## Running
@@ -144,7 +144,7 @@ storage:
 Start the bot and watch logs in the current terminal:
 
 ```bash
-niuma
+jbot
 ```
 
 ### Daemon Mode
@@ -152,22 +152,22 @@ niuma
 Run in the background (similar to nohup):
 
 ```bash
-niuma --daemon
+jbot --daemon
 ```
 
-Logs are written to `~/.niuma/niuma.log`.
+Logs are written to `~/.jbot/jbot.log`.
 
 ### Custom Config Path
 
 Specify a non-default config file:
 
 ```bash
-niuma -c /path/to/config.yaml
+jbot -c /path/to/config.yaml
 ```
 
 ## Persistence Across Restarts
 
-The SQLite database at `~/.niuma/niuma.db` is **persistent** — do not delete it between restarts. It stores:
+The SQLite database at `~/.jbot/jbot.db` is **persistent** — do not delete it between restarts. It stores:
 
 - All session history and results
 - The Manager's Claude `session_id` (resumed on restart)
@@ -182,7 +182,7 @@ from niuma.db import Database
 import asyncio
 
 async def show_cost():
-    db = Database("~/.niuma/niuma.db")
+    db = Database("~/.jbot/jbot.db")
     await db.init()
     total = await db.get_total_cost_usd()
     print(f"Total cost: ${total:.4f}")
@@ -241,7 +241,7 @@ pytest --cov=src/niuma --cov-report=term-missing
 
 ## Troubleshooting
 
-**Bot not starting**: Check `~/.niuma/niuma.log` for errors. Ensure config.yaml is valid YAML and all paths are correct.
+**Bot not starting**: Check `~/.jbot/jbot.log` for errors. Ensure config.yaml is valid YAML and all paths are correct.
 
 **Messages not being detected**: Verify the chat ID is correct and the bot has access to the chat. Check that allowed_users includes the sender's email.
 

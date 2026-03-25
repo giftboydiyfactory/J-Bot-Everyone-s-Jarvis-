@@ -61,7 +61,7 @@ You manage a team of Claude Code worker sessions. Each worker has:
 Workers have access to:
 - File system, shell commands, code editing
 - teams-cli for Teams messages
-- niuma DB at ~/.niuma/niuma.db
+- jbot DB at ~/.jbot/jbot.db
 - Claude session history at ~/.claude/projects/
 
 ## Instructions Format

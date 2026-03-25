@@ -122,7 +122,7 @@ def _md_to_html(text: str) -> str:
 
 
 class Responder:
-    def __init__(self, output_dir: str = "~/.niuma/outputs", bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🐴") -> None:
+    def __init__(self, output_dir: str = "~/.jbot/outputs", bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🐴") -> None:
         self._output_dir = str(Path(output_dir).expanduser())
         self._bot_name = bot_name
         self._bot_emoji = bot_emoji

@@ -141,6 +141,6 @@ def load_config(path: Path) -> NiumaConfig:
         ),
         logging=LoggingConfig(
             level=logging_raw.get("level", "INFO"),
-            file=_expand_path(logging_raw.get("file", "~/.niuma/niuma.log")),
+            file=_expand_path(logging_raw.get("file", "~/.jbot/jbot.log")),
         ),
     )

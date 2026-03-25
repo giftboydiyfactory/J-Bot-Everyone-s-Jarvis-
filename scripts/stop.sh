@@ -1,6 +1,6 @@
 #!/bin/bash
 # Stop J-Bot and its watchdog
-PIDFILE="$HOME/.niuma/watchdog.pid"
+PIDFILE="$HOME/.jbot/watchdog.pid"
 
 echo "🤖 J-Bot: stopping..."
 if [ -f "$PIDFILE" ]; then

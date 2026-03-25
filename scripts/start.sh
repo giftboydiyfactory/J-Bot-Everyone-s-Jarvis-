@@ -1,11 +1,11 @@
 #!/bin/bash
 # J-Bot start: kill old processes, start with watchdog (auto-restart on crash)
-# Survives SSH disconnect via nohup. Logs to ~/.niuma/niuma.log
+# Survives SSH disconnect via nohup. Logs to ~/.jbot/jbot.log
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="$REPO_DIR/.venv"
-PIDFILE="$HOME/.niuma/watchdog.pid"
+PIDFILE="$HOME/.jbot/watchdog.pid"
 
 # 1. Kill old processes
 echo "🤖 J-Bot: starting..."
@@ -29,7 +29,7 @@ else
     source "$VENV/bin/activate"
 fi
 
-mkdir -p "$HOME/.niuma"
+mkdir -p "$HOME/.jbot"
 
 # 3. Start watchdog loop (nohup + background = survives SSH disconnect)
 echo "  [3/3] Starting watchdog..."
@@ -41,9 +41,9 @@ echo $$ > "$PIDFILE"
 source "$VENV/bin/activate"
 
 while true; do
-    echo "$(date "+%Y-%m-%d %H:%M:%S") [watchdog] Starting J-Bot..." >> ~/.niuma/niuma.log
-    niuma 2>&1 | tee -a ~/.niuma/niuma.log || true
-    echo "$(date "+%Y-%m-%d %H:%M:%S") [watchdog] J-Bot exited. Restarting in 10s..." >> ~/.niuma/niuma.log
+    echo "$(date "+%Y-%m-%d %H:%M:%S") [watchdog] Starting J-Bot..." >> ~/.jbot/jbot.log
+    jbot 2>&1 | tee -a ~/.jbot/jbot.log || true
+    echo "$(date "+%Y-%m-%d %H:%M:%S") [watchdog] J-Bot exited. Restarting in 10s..." >> ~/.jbot/jbot.log
     sleep 10
 done
 ' > /dev/null 2>&1 &
@@ -57,5 +57,5 @@ done
 echo ""
 echo "✅ J-Bot started with watchdog (PID: $(cat "$PIDFILE" 2>/dev/null || echo 'starting...'))"
 echo "   Auto-restarts on crash. Survives SSH disconnect."
-echo "   Logs:    tail -f ~/.niuma/niuma.log"
+echo "   Logs:    tail -f ~/.jbot/jbot.log"
 echo "   Stop:    bash scripts/stop.sh"
