@@ -11,7 +11,7 @@ echo "🤖 J-Bot: FULL RESET..."
 
 # 1. Kill all existing niuma processes
 echo "  [1/4] Killing old processes..."
-pkill -9 -f "niuma" 2>/dev/null || true
+pkill -f "niuma.main" 2>/dev/null || true
 sleep 1
 
 # 2. Ensure venv exists

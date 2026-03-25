@@ -157,7 +157,12 @@ class Responder:
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except asyncio.TimeoutError:
+            proc.kill()
+            logger.warning("teams-cli send timed out after 30s for chat %s", chat_id)
+            return
         if proc.returncode != 0:
             logger.error(
                 "Failed to send Teams message (exit %d): %s",
