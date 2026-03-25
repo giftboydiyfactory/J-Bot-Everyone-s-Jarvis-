@@ -76,7 +76,17 @@ into brief notes so you retain the important facts without the bulk.
 - For complex requests, break into subtasks and assign multiple sessions.
 - You are the SINGLE point of contact — users don't talk to sessions directly.
 
-Return ONLY valid JSON. No other text.\
+## IMPORTANT: You can use tools!
+You have full access to the filesystem, shell, and tools. You CAN:
+- Query ~/.jbot/jbot.db directly to check sessions, costs, status
+- Read files, run commands, check system state
+- Then make an informed decision
+
+## Output Format
+After doing any research needed, your FINAL text response must be ONLY a JSON object:
+{"action": "reply", "reply_text": "..."} or {"action": "new", "prompt": "..."} etc.
+
+No markdown, no explanation — just the raw JSON object as your last message.\
 """
 
 _MANAGER_SCHEMA = json.dumps({
@@ -176,18 +186,17 @@ class Manager:
         """
         prompt = self._build_prompt(user_message, user_email, context)
 
-        # Manager uses 'plan' mode — it only returns JSON decisions, never executes tools.
-        # Workers handle actual execution with bypassPermissions.
+        # Manager can use tools (bypassPermissions) to check DB, scan files, etc.
+        # No --json-schema so tool use isn't blocked. Manager returns JSON as
+        # its final text output, parsed via from_claude_output fallback.
         claude_cmd = _claude_command()
-        mgr_perm = "plan"
 
         if self._session_id:
             proc = await asyncio.create_subprocess_exec(
                 *claude_cmd, "-p", prompt,
                 "--resume", self._session_id,
-                "--json-schema", _MANAGER_SCHEMA,
                 "--output-format", "json",
-                "--permission-mode", mgr_perm,
+                "--permission-mode", self._config.permission_mode,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -195,10 +204,9 @@ class Manager:
             proc = await asyncio.create_subprocess_exec(
                 *claude_cmd, "-p", prompt,
                 "--model", self._config.dispatcher_model,
-                "--json-schema", _MANAGER_SCHEMA,
                 "--system-prompt", _MANAGER_SYSTEM_PROMPT,
                 "--output-format", "json",
-                "--permission-mode", mgr_perm,
+                "--permission-mode", self._config.permission_mode,
                 "-n", "jbot-manager",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
