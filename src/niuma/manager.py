@@ -176,27 +176,29 @@ class Manager:
         """
         prompt = self._build_prompt(user_message, user_email, context)
 
+        # Manager uses 'plan' mode — it only returns JSON decisions, never executes tools.
+        # Workers handle actual execution with bypassPermissions.
         claude_cmd = _claude_command()
+        mgr_perm = "plan"
+
         if self._session_id:
-            # Resume existing Manager session
             proc = await asyncio.create_subprocess_exec(
                 *claude_cmd, "-p", prompt,
                 "--resume", self._session_id,
                 "--json-schema", _MANAGER_SCHEMA,
                 "--output-format", "json",
-                "--permission-mode", self._config.permission_mode,
+                "--permission-mode", mgr_perm,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
         else:
-            # First call: create new Manager session
             proc = await asyncio.create_subprocess_exec(
                 *claude_cmd, "-p", prompt,
                 "--model", self._config.dispatcher_model,
                 "--json-schema", _MANAGER_SCHEMA,
                 "--system-prompt", _MANAGER_SYSTEM_PROMPT,
                 "--output-format", "json",
-                "--permission-mode", self._config.permission_mode,
+                "--permission-mode", mgr_perm,
                 "-n", "jbot-manager",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
