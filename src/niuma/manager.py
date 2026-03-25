@@ -80,7 +80,16 @@ into brief notes so you retain the important facts without the bulk.
 You have full access to the filesystem, shell, and tools. You CAN:
 - Query ~/.jbot/jbot.db directly to check sessions, costs, status
 - Read files, run commands, check system state
-- Then make an informed decision and return your JSON action.\
+- Then make an informed decision
+
+## CRITICAL OUTPUT FORMAT
+Your FINAL text response MUST be ONLY a valid JSON object. Examples:
+{"action": "reply", "reply_text": "Hello! Here are your sessions..."}
+{"action": "new", "prompt": "analyze the auth module", "dedicated_chat": true}
+{"action": "resume", "session_id": "0325-a7f3", "prompt": "continue"}
+{"action": "stop", "session_id": "0325-a7f3"}
+
+Do NOT wrap in markdown. Do NOT add explanation. ONLY the JSON object.\
 """
 
 _MANAGER_SCHEMA = json.dumps({
@@ -180,18 +189,15 @@ class Manager:
         """
         prompt = self._build_prompt(user_message, user_email, context)
 
-        # Manager can use tools AND return structured decisions.
-        # Uses --append-system-prompt (not --system-prompt) so Claude keeps
-        # its default behavior, plus our routing instructions.
-        # Uses --json-schema for structured output but with bypassPermissions
-        # so tools still work. The schema forces a final JSON after tool use.
+        # Manager uses tools freely + returns JSON as final text.
+        # No --json-schema (broken on --resume). System prompt instructs
+        # JSON output; from_claude_output parses it from result text.
         claude_cmd = _claude_command()
 
         if self._session_id:
             proc = await asyncio.create_subprocess_exec(
                 *claude_cmd, "-p", prompt,
                 "--resume", self._session_id,
-                "--json-schema", _MANAGER_SCHEMA,
                 "--output-format", "json",
                 "--permission-mode", self._config.permission_mode,
                 stdout=asyncio.subprocess.PIPE,
@@ -201,7 +207,6 @@ class Manager:
             proc = await asyncio.create_subprocess_exec(
                 *claude_cmd, "-p", prompt,
                 "--model", self._config.dispatcher_model,
-                "--json-schema", _MANAGER_SCHEMA,
                 "--append-system-prompt", _MANAGER_SYSTEM_PROMPT,
                 "--output-format", "json",
                 "--permission-mode", self._config.permission_mode,
@@ -211,7 +216,6 @@ class Manager:
             )
 
         stdout, stderr = await proc.communicate()
-
 
         if proc.returncode != 0:
             error_msg = stderr.decode().strip()
