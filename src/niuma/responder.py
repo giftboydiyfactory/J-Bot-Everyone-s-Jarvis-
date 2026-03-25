@@ -22,7 +22,7 @@ def _make_signature(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") 
 
 # Marker appended to all bot messages — Teams strips HTML comments,
 # so we use a visible but subtle signature that the poller can detect.
-_BOT_MARKER = '<hr/><p><em>Sent by J-Bot</em></p>'
+_BOT_MARKER = '<hr/><p><em>🤖 Sent by J-Bot</em></p>'
 
 
 def _make_prefix(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> str:
