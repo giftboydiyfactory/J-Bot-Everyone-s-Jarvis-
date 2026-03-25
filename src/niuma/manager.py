@@ -212,8 +212,6 @@ class Manager:
 
         stdout, stderr = await proc.communicate()
 
-        # Debug: log raw output
-        logger.info("Manager raw output (first 500): %s", stdout.decode()[:500])
 
         if proc.returncode != 0:
             error_msg = stderr.decode().strip()
