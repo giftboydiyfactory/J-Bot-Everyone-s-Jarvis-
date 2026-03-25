@@ -20,8 +20,9 @@ def _make_signature(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") 
     return ""
 
 
-# Hidden marker appended to all bot messages — detected via raw HTML in poller
-_BOT_MARKER = "<!-- jbot-msg -->"
+# Marker appended to all bot messages — Teams strips HTML comments,
+# so we use a visible but subtle signature that the poller can detect.
+_BOT_MARKER = '<hr/><p><em>Sent by J-Bot</em></p>'
 
 
 def _make_prefix(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> str:
