@@ -13,8 +13,8 @@ teams:
   poll_interval: 60  # seconds
 
 claude:
-  dispatcher_model: "sonnet"
-  worker_model: "sonnet"
+  dispatcher_model: "opus"
+  worker_model: "opus"
   max_concurrent: 5
   session_timeout: 86400  # 24 hours
   permission_mode: "auto"
