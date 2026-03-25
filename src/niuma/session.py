@@ -32,7 +32,7 @@ def _build_worker_safety_prompt(bot_name: str = "jbot") -> str:
         "DROP TABLE, etc.) unless the user explicitly requests it. "
         "Always prefer safe, reversible operations.\n\n"
         f"J-BOT CONTEXT: You have access to the J-Bot infrastructure:\n"
-        f"- J-Bot DB: ~/.niuma/niuma.db (SQLite, tables: sessions, messages, poll_state)\n"
+        f"- J-Bot DB: ~/.jbot/jbot.db (SQLite, tables: sessions, messages, poll_state)\n"
         "- Claude session history: ~/.claude/projects/*/  (JSONL files per session)\n"
         "- J-Bot source: the J-Bot source directory (wherever you cloned the repo)\n"
         "- teams-cli: can read/send Teams messages (use READ_WRITE_MODE=1 for sends)\n"

@@ -11,7 +11,7 @@
         <string>-m</string>
         <string>niuma.main</string>
         <string>-c</string>
-        <string>/Users/jackeyw/.niuma/config.yaml</string>
+        <string>/Users/jackeyw/.jbot/config.yaml</string>
     </array>
 
     <key>WorkingDirectory</key>
@@ -38,9 +38,9 @@
     <integer>30</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/jackeyw/.niuma/launchd-stdout.log</string>
+    <string>/Users/jackeyw/.jbot/launchd-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/jackeyw/.niuma/launchd-stderr.log</string>
+    <string>/Users/jackeyw/.jbot/launchd-stderr.log</string>
 </dict>
 </plist>

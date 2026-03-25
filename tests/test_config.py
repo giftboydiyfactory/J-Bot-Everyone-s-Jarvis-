@@ -8,7 +8,7 @@ from niuma.config import load_config, NiumaConfig, BotConfig, ConfigError
 
 def test_load_config_from_file(config_file: Path) -> None:
     config = load_config(config_file)
-    assert config.teams.trigger == "@niuma"
+    assert config.teams.trigger == "@jbot"
     assert config.teams.poll_interval == 60
     assert config.claude.max_concurrent == 5
     assert config.claude.session_timeout == 86400
@@ -17,8 +17,8 @@ def test_load_config_from_file(config_file: Path) -> None:
 
 def test_load_config_bot_section(config_file: Path) -> None:
     config = load_config(config_file)
-    assert config.bot.name == "niuma"
-    assert config.bot.trigger == "@niuma"
+    assert config.bot.name == "jbot"
+    assert config.bot.trigger == "@jbot"
     assert config.bot.emoji == "🐴"
 
 
@@ -43,11 +43,11 @@ def test_load_config_bot_defaults(tmp_dir: Path) -> None:
     path = tmp_dir / "config.yaml"
     path.write_text(yaml.dump(raw))
     config = load_config(path)
-    assert config.bot.name == "niuma"
-    assert config.bot.trigger == "@niuma"
+    assert config.bot.name == "jbot"
+    assert config.bot.trigger == "@jbot"
     assert config.bot.emoji == "🐴"
     # teams.trigger should default to bot.trigger when not set
-    assert config.teams.trigger == "@niuma"
+    assert config.teams.trigger == "@jbot"
 
 
 def test_load_config_custom_bot_name(tmp_dir: Path) -> None:
@@ -83,7 +83,7 @@ def test_load_config_expands_home(tmp_dir: Path) -> None:
     import yaml
 
     raw = {
-        "teams": {"chat_ids": ["x"], "trigger": "@niuma", "poll_interval": 60},
+        "teams": {"chat_ids": ["x"], "trigger": "@jbot", "poll_interval": 60},
         "claude": {
             "dispatcher_model": "sonnet",
             "worker_model": "sonnet",
@@ -93,8 +93,8 @@ def test_load_config_expands_home(tmp_dir: Path) -> None:
             "default_cwd": "~",
         },
         "security": {"allowed_users": ["a@b.com"], "admin_users": ["a@b.com"]},
-        "storage": {"db_path": "~/.niuma/test.db"},
-        "logging": {"level": "INFO", "file": "~/.niuma/test.log"},
+        "storage": {"db_path": "~/.jbot/test.db"},
+        "logging": {"level": "INFO", "file": "~/.jbot/test.log"},
     }
     path = tmp_dir / "config.yaml"
     path.write_text(yaml.dump(raw))

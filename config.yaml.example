@@ -1,5 +1,5 @@
 # J-Bot (Everyone's Jarvis) configuration
-# Copy to ~/.niuma/config.yaml and edit
+# Copy to ~/.jbot/config.yaml and edit
 
 bot:
   name: "jbot"
@@ -27,8 +27,8 @@ security:
     - "you@nvidia.com"
 
 storage:
-  db_path: "~/.niuma/niuma.db"
+  db_path: "~/.jbot/jbot.db"
 
 logging:
   level: "INFO"
-  file: "~/.niuma/niuma.log"
+  file: "~/.jbot/jbot.log"

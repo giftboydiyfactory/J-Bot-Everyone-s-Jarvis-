@@ -4,7 +4,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="$REPO_DIR/.venv"
-LOG="$HOME/.niuma/niuma.log"
+LOG="$HOME/.jbot/jbot.log"
 
 cd "$REPO_DIR"
 
@@ -44,7 +44,7 @@ sleep 2
 # Start new J-Bot
 echo "$(date '+%Y-%m-%d %H:%M:%S') [check] Starting J-Bot..."
 source "$VENV/bin/activate"
-niuma --daemon
+jbot --daemon
 
 NEW_COMMIT=$(git rev-parse --short HEAD)
 echo "$(date '+%Y-%m-%d %H:%M:%S') [check] Restarted on commit $NEW_COMMIT"

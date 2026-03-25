@@ -23,7 +23,7 @@ from niuma.session import SessionManager
 
 logger = logging.getLogger("niuma")
 
-_DEFAULT_CONFIG = Path.home() / ".niuma" / "config.yaml"
+_DEFAULT_CONFIG = Path.home() / ".jbot" / "config.yaml"
 
 _BOT_STATE_MANAGER_CHAT = "manager_chat_id"
 
@@ -234,7 +234,7 @@ class NiumaBot:
     async def _check_config_reload(self) -> None:
         """Reload config if the file has been modified."""
         import os
-        config_path = Path.home() / ".niuma" / "config.yaml"
+        config_path = Path.home() / ".jbot" / "config.yaml"
         try:
             mtime = os.path.getmtime(config_path)
             if not hasattr(self, '_config_mtime'):

@@ -5,7 +5,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="$REPO_DIR/.venv"
-DB="$HOME/.niuma/niuma.db"
+DB="$HOME/.jbot/jbot.db"
 
 echo "🤖 J-Bot: FULL RESET..."
 
@@ -27,7 +27,7 @@ fi
 
 # 3. Clear ALL DB state (nuclear option)
 echo "  [3/4] Clearing all state..."
-mkdir -p "$HOME/.niuma"
+mkdir -p "$HOME/.jbot"
 python3 -c "
 import asyncio, aiosqlite, os
 
@@ -50,8 +50,8 @@ asyncio.run(clean())
 
 # 4. Start daemon
 echo "  [4/4] Starting daemon..."
-niuma --daemon
+jbot --daemon
 
 echo ""
 echo "⚠️  J-Bot started with FRESH state. New Manager session and chat will be created."
-echo "   Logs: tail -f ~/.niuma/niuma.log"
+echo "   Logs: tail -f ~/.jbot/jbot.log"

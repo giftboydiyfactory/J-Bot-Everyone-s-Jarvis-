@@ -16,7 +16,7 @@ sleep 1
 
 # 2. Ensure dirs exist
 echo "  [2/4] Ensuring directories..."
-mkdir -p "$HOME/.niuma"
+mkdir -p "$HOME/.jbot"
 mkdir -p "$HOME/Library/LaunchAgents"
 
 # 3. Copy plist
@@ -30,7 +30,7 @@ launchctl bootstrap gui/$(id -u) "$PLIST_DST"
 echo ""
 echo "✅ J-Bot service installed!"
 echo "   Status:  launchctl print gui/$(id -u)/com.jbot.daemon"
-echo "   Logs:    tail -f ~/.niuma/launchd-stderr.log"
+echo "   Logs:    tail -f ~/.jbot/launchd-stderr.log"
 echo "   Stop:    launchctl bootout gui/$(id -u) $PLIST_DST"
 echo "   Restart: launchctl kickstart -k gui/$(id -u)/com.jbot.daemon"
 echo ""

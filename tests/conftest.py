@@ -18,13 +18,13 @@ def tmp_dir(tmp_path: Path) -> Path:
 def sample_config(tmp_dir: Path) -> dict[str, Any]:
     return {
         "bot": {
-            "name": "niuma",
-            "trigger": "@niuma",
+            "name": "jbot",
+            "trigger": "@jbot",
             "emoji": "🐴",
         },
         "teams": {
             "chat_ids": ["19:test-chat@thread.v2"],
-            "trigger": "@niuma",
+            "trigger": "@jbot",
             "poll_interval": 60,
             "reply_only_chat_ids": [],
             "auto_session_chats": False,
