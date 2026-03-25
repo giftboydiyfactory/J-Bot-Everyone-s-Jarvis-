@@ -80,13 +80,7 @@ into brief notes so you retain the important facts without the bulk.
 You have full access to the filesystem, shell, and tools. You CAN:
 - Query ~/.jbot/jbot.db directly to check sessions, costs, status
 - Read files, run commands, check system state
-- Then make an informed decision
-
-## Output Format
-After doing any research needed, your FINAL text response must be ONLY a JSON object:
-{"action": "reply", "reply_text": "..."} or {"action": "new", "prompt": "..."} etc.
-
-No markdown, no explanation — just the raw JSON object as your last message.\
+- Then make an informed decision and return your JSON action.\
 """
 
 _MANAGER_SCHEMA = json.dumps({
@@ -186,15 +180,18 @@ class Manager:
         """
         prompt = self._build_prompt(user_message, user_email, context)
 
-        # Manager can use tools (bypassPermissions) to check DB, scan files, etc.
-        # No --json-schema so tool use isn't blocked. Manager returns JSON as
-        # its final text output, parsed via from_claude_output fallback.
+        # Manager can use tools AND return structured decisions.
+        # Uses --append-system-prompt (not --system-prompt) so Claude keeps
+        # its default behavior, plus our routing instructions.
+        # Uses --json-schema for structured output but with bypassPermissions
+        # so tools still work. The schema forces a final JSON after tool use.
         claude_cmd = _claude_command()
 
         if self._session_id:
             proc = await asyncio.create_subprocess_exec(
                 *claude_cmd, "-p", prompt,
                 "--resume", self._session_id,
+                "--json-schema", _MANAGER_SCHEMA,
                 "--output-format", "json",
                 "--permission-mode", self._config.permission_mode,
                 stdout=asyncio.subprocess.PIPE,
@@ -204,7 +201,8 @@ class Manager:
             proc = await asyncio.create_subprocess_exec(
                 *claude_cmd, "-p", prompt,
                 "--model", self._config.dispatcher_model,
-                "--system-prompt", _MANAGER_SYSTEM_PROMPT,
+                "--json-schema", _MANAGER_SCHEMA,
+                "--append-system-prompt", _MANAGER_SYSTEM_PROMPT,
                 "--output-format", "json",
                 "--permission-mode", self._config.permission_mode,
                 "-n", "jbot-manager",
@@ -213,6 +211,9 @@ class Manager:
             )
 
         stdout, stderr = await proc.communicate()
+
+        # Debug: log raw output
+        logger.info("Manager raw output (first 500): %s", stdout.decode()[:500])
 
         if proc.returncode != 0:
             error_msg = stderr.decode().strip()
