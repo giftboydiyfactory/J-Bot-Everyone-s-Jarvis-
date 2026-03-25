@@ -6,6 +6,7 @@ NiumaBot delegates all inbound-message logic here.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Literal, Optional
 
@@ -90,15 +91,28 @@ async def handle_message(
         chat_id, "🤖 Received — thinking...", reply_to=rt,
     )
 
-    try:
-        decision = await bot._manager.decide(
-            user_message=effective_prompt,
-            user_email=user_email,
-        )
-    except Exception:
-        logger.exception("Manager failed for message from %s", user_email)
+    decision = None
+    last_error = None
+    for attempt in range(2):
+        try:
+            decision = await bot._manager.decide(
+                user_message=effective_prompt,
+                user_email=user_email,
+            )
+            break
+        except Exception as exc:
+            last_error = exc
+            logger.warning("Manager attempt %d failed for %s: %s", attempt + 1, user_email, exc)
+            if attempt == 0:
+                await asyncio.sleep(3)  # Brief pause before retry
+
+    if decision is None:
+        logger.exception("Manager failed after retries for %s", user_email, exc_info=last_error)
         await bot._responder.send_text(
-            chat_id, "❌ Sorry, I couldn't process that. Please try again.", reply_to=rt,
+            chat_id,
+            f"⚠️ Hit a transient error — retried but still failed. "
+            f"Please send your message again in a moment.",
+            reply_to=rt,
         )
         return
 
