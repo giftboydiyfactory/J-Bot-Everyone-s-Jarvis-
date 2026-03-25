@@ -24,9 +24,35 @@ def _claude_command() -> list[str]:
         return ["clp", "run", "--", "claude"]
     return ["claude"]
 
+def _load_skills() -> str:
+    """Load all skill files from the skills/ directory in the repo."""
+    import pathlib
+    # Try to find skills dir relative to this source file
+    src_dir = pathlib.Path(__file__).parent.parent.parent  # src/niuma/session.py → repo root
+    skills_dir = src_dir / "skills"
+    if not skills_dir.exists():
+        return ""
+
+    parts = []
+    for skill_dir in sorted(skills_dir.iterdir()):
+        skill_file = skill_dir / "SKILL.md"
+        if skill_file.exists():
+            try:
+                content = skill_file.read_text().strip()
+                parts.append(f"\n\n## Skill: {skill_dir.name}\n\n{content}")
+            except Exception:
+                continue
+
+    return "\n".join(parts) if parts else ""
+
+
+# Cache skills content at module load time (read once, reuse for all workers)
+_CACHED_SKILLS = _load_skills()
+
+
 def _build_worker_safety_prompt(bot_name: str = "jbot") -> str:
-    return (
-        f"You are a {bot_name} worker session managed by J-Bot. "
+    prompt = (
+        f"You are a {bot_name} task session managed by J-Bot. "
         "Execute the user's request thoroughly. "
         "SAFETY: Do NOT execute destructive commands (rm -rf, git push --force, "
         "DROP TABLE, etc.) unless the user explicitly requests it. "
@@ -39,6 +65,11 @@ def _build_worker_safety_prompt(bot_name: str = "jbot") -> str:
         "When asked to manage sessions, scan history, create groups, import sessions, etc. "
         "you can directly access these resources."
     )
+
+    if _CACHED_SKILLS:
+        prompt += f"\n\n# Available Skills (reference guides for tools)\n{_CACHED_SKILLS}"
+
+    return prompt
 
 
 class SessionManager:
