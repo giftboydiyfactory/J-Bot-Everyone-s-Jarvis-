@@ -327,8 +327,10 @@ class NiumaBot:
         triggered = self._poller.filter_triggered(messages)
         new_messages = self._poller.filter_new(triggered, last_seen)
 
+        # Update poll state FIRST to prevent re-processing if handler is slow
+        await self._db.set_poll_state(chat_id, newest_id)
+
         if not new_messages:
-            await self._db.set_poll_state(chat_id, newest_id)
             return
 
         for msg in new_messages:
@@ -344,8 +346,6 @@ class NiumaBot:
                 continue
 
             await self._handle_message(chat_id, msg.sender_email, prompt, msg.id)
-
-        await self._db.set_poll_state(chat_id, newest_id)
 
     async def _poll_session_chat(self, chat_id: str) -> None:
         """Poll a session-dedicated chat. All messages auto-route to the bound session."""
@@ -375,14 +375,16 @@ class NiumaBot:
 
         # Filter new messages (no trigger needed in session chats)
         new_messages = self._poller.filter_new(messages, last_seen)
+
+        # Update poll state FIRST to prevent re-processing if handler is slow
+        await self._db.set_poll_state(chat_id, newest_id)
+
         if not new_messages:
-            await self._db.set_poll_state(chat_id, newest_id)
             return
 
         # Find the bound session
         session = await self._db.get_session_by_chat_id(chat_id)
         if not session:
-            await self._db.set_poll_state(chat_id, newest_id)
             return
 
         for msg in new_messages:
@@ -422,8 +424,6 @@ class NiumaBot:
             except (ValueError, RuntimeError) as e:
                 await self._responder.send_text(chat_id, str(e))
 
-        await self._db.set_poll_state(chat_id, newest_id)
-
     async def _poll_manager_chat(self, chat_id: str) -> None:
         """Poll the Manager's dedicated chat. Messages here go directly to Manager."""
         from niuma.poller import TeamsCliError
@@ -455,6 +455,9 @@ class NiumaBot:
             await self._db.set_poll_state(chat_id, newest_id)
             return
 
+        # Update poll state FIRST to prevent re-processing if handler is slow
+        await self._db.set_poll_state(chat_id, newest_id)
+
         for msg in new_messages:
             if not self._is_allowed(msg.sender_email):
                 continue
@@ -466,8 +469,6 @@ class NiumaBot:
 
             # Route through Manager, responses go to manager chat
             await self._handle_message(chat_id, msg.sender_email, prompt, msg.id)
-
-        await self._db.set_poll_state(chat_id, newest_id)
 
     def _is_reply_only(self, chat_id: str) -> bool:
         # Use dynamic set if populated by poll_once, otherwise fall back to config
