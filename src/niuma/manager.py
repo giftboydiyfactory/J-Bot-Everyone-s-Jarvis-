@@ -225,9 +225,29 @@ class Manager:
         stdout, stderr = await proc.communicate()
 
         if proc.returncode != 0:
+            error_msg = stderr.decode().strip()
+
+            # If resume failed because session was deleted/expired, auto-create new session
+            if self._session_id and "No conversation found" in error_msg:
+                logger.warning(
+                    "Manager session %s expired — creating fresh session", self._session_id[:12]
+                )
+                self._session_id = None
+                if self._db is not None:
+                    try:
+                        await self._db.set_bot_state(_BOT_STATE_MANAGER_SESSION, "")
+                    except Exception:
+                        pass
+                # Retry with a fresh session
+                return await self.decide(
+                    user_message=user_message,
+                    user_email=user_email,
+                    context=context,
+                )
+
             raise RuntimeError(
                 f"Manager claude call failed (exit {proc.returncode}): "
-                f"{stderr.decode().strip()[:200]}"
+                f"{error_msg[:200]}"
             )
 
         raw = stdout.decode()
