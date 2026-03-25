@@ -44,7 +44,11 @@ class Poller:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except asyncio.TimeoutError:
+            proc.kill()
+            raise TeamsCliError(exit_code=8, message="teams-cli timed out after 30s")
         if proc.returncode != 0:
             error_msg = stderr.decode().strip()
             raise TeamsCliError(

@@ -156,6 +156,7 @@ class Manager:
         user_email: str,
         chat_id: str,
         context: str = "",
+        _is_retry: bool = False,
     ) -> None:
         """Send a message to the Manager — it replies directly via teams-cli.
 
@@ -194,6 +195,8 @@ class Manager:
 
             # If resume failed because session was deleted/expired, auto-create new session
             if self._session_id and "No conversation found" in error_msg:
+                if _is_retry:
+                    raise RuntimeError("Manager session creation failed after retry")
                 logger.warning(
                     "Manager session %s expired — creating fresh session", self._session_id[:12]
                 )
@@ -209,6 +212,7 @@ class Manager:
                     user_email=user_email,
                     chat_id=chat_id,
                     context=context,
+                    _is_retry=True,
                 )
 
             raise RuntimeError(

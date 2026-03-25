@@ -94,6 +94,7 @@ class SessionManager:
         self._active: dict[str, asyncio.subprocess.Process] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._resume_locks: dict[str, asyncio.Lock] = {}
+        self._retried: set[str] = set()
 
     @property
     def active_count(self) -> int:
@@ -264,8 +265,8 @@ class SessionManager:
                 error = stderr.decode().strip()
                 # Retry once for transient errors
                 retryable = any(kw in error.lower() for kw in ["timeout", "network", "token", "expired", "econnreset", "connection"])
-                if retryable and not getattr(self, f'_retried_{session_id}', False):
-                    setattr(self, f'_retried_{session_id}', True)
+                if retryable and not session_id in self._retried:
+                    self._retried.add(session_id)
                     logger.warning("Session %s failed with retryable error, retrying once: %s", session_id, error[:100])
                     # Re-run via resume
                     session = await self._db.get_session(session_id)
@@ -309,8 +310,4 @@ class SessionManager:
     def _cleanup(self, session_id: str) -> None:
         self._active.pop(session_id, None)
         self._tasks.pop(session_id, None)
-        # Clean up retry flag
-        try:
-            delattr(self, f'_retried_{session_id}')
-        except AttributeError:
-            pass
+        self._retried.discard(session_id)

@@ -40,6 +40,7 @@ class NiumaBot:
         self._responder: Optional[Responder] = None
         self._running = False
         self._shutting_down = False
+        self._config_mtime: float = 0.0
         self._backoff_seconds: dict[str, int] = {}
         self._background_tasks: set[asyncio.Task] = set()
 
@@ -247,7 +248,7 @@ class NiumaBot:
         config_path = Path.home() / ".jbot" / "config.yaml"
         try:
             mtime = os.path.getmtime(config_path)
-            if not hasattr(self, '_config_mtime'):
+            if self._config_mtime == 0.0:
                 self._config_mtime = mtime
                 return
             if mtime > self._config_mtime:
@@ -577,7 +578,9 @@ def _daemonize() -> None:
     os.setsid()
     if os.fork() > 0:
         sys.exit(0)
-    devnull = open(os.devnull, "r+")
-    sys.stdin = devnull
+    sys.stdin.close()
+    sys.stdout.close()
+    sys.stderr.close()
+    sys.stdin = open(os.devnull, "r")
     sys.stdout = open(os.devnull, "w")
     sys.stderr = open(os.devnull, "w")

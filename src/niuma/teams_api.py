@@ -26,6 +26,12 @@ def _get_access_token() -> str:
     if not _TOKEN_CACHE.exists():
         raise RuntimeError("Token cache not found. Run 'teams-cli auth login' first.")
 
+    # Check permissions
+    import stat as _stat
+    _mode = _TOKEN_CACHE.stat().st_mode
+    if _mode & (_stat.S_IRGRP | _stat.S_IROTH):
+        logger.warning("Token cache %s has permissive permissions. Run: chmod 600 %s", _TOKEN_CACHE, _TOKEN_CACHE)
+
     with open(_TOKEN_CACHE) as f:
         data = json.load(f)
 

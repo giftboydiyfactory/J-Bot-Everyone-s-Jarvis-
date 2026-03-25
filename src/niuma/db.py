@@ -83,7 +83,7 @@ def _short_id() -> str:
     import datetime
     now = datetime.datetime.now()
     date_prefix = now.strftime("%m%d")
-    random_suffix = secrets.token_hex(2)
+    random_suffix = secrets.token_hex(4)
     return f"{date_prefix}-{random_suffix}"
 
 
