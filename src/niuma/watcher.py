@@ -197,17 +197,14 @@ async def watch_session(
                     chat_id, session_id, result=result_text, reply_to=reply_to,
                 )
 
-            # Feed result back to Manager so it remembers — errors are caught internally
-            mgr_decision = await bot._manager.feed_worker_result(
+            # Feed result back to Manager so it remembers and can report to user
+            # Manager replies directly via teams-cli, no parsing needed
+            await bot._manager.feed_worker_result(
                 session_id=session_id,
                 result=result_text or error_text or "",
                 status=status,
+                chat_id=chat_id,
             )
-            # If Manager wants to report something, send it
-            if mgr_decision.action == "report" and mgr_decision.reply_text:
-                await bot._responder.send_text(
-                    chat_id, mgr_decision.reply_text, reply_to=reply_to,
-                )
 
             # Auto-resume with queued messages if any were saved while worker was busy
             if status == "completed":

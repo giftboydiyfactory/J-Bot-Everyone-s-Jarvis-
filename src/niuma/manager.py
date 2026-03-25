@@ -1,11 +1,9 @@
 # src/niuma/manager.py
 """Stateful Manager session — the 'team lead' that manages all worker sessions.
 
-Unlike the old stateless Dispatcher, the Manager is a single persistent Claude Code
-session that gets --resume'd for every user message. It remembers all context:
-who asked what, which workers are running, what results came back.
-
-The Manager returns structured JSON instructions that the bot executes.
+The Manager is a persistent Claude Code session that gets --resume'd for every
+user message. It has full tool access and replies DIRECTLY to Teams using
+teams-cli, eliminating the JSON-parsing bottleneck.
 """
 from __future__ import annotations
 
@@ -16,141 +14,117 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 from niuma.config import ClaudeConfig
-from niuma.session import _claude_command
+from niuma.session import _claude_command, _load_skills
 
 if TYPE_CHECKING:
     from niuma.db import Database
 
 logger = logging.getLogger(__name__)
 
-_MANAGER_SYSTEM_PROMPT = """\
+
+def _build_manager_system_prompt() -> str:
+    """Build the full Manager system prompt with skills injected."""
+    skills_content = _load_skills()
+
+    prompt = """\
 You are J-Bot — an AI coordinator managing task sessions via Teams chat.
+You have FULL tool access: filesystem, shell, sqlite3, teams-cli, claude CLI.
+
+## How to Reply to Users
+
+You reply DIRECTLY to Teams using teams-cli. The chat_id is provided in every message.
+Use this exact command pattern:
+
+```bash
+READ_WRITE_MODE=1 teams-cli chat send "<chat_id>" --html --body "<your HTML message>"
+```
+
+CRITICAL FORMATTING RULES:
+1. EVERY message MUST start with: <p><b>【🤖J-Bot】</b>
+2. EVERY message MUST end with: <hr/><p><em>🤖 Sent by J-Bot</em></p>
+3. ALWAYS use --html flag
+4. Use proper HTML: <p>, <b>, <ul>/<li>, <code>, <br/>, <table>
+5. Be concise — lead with the answer, use bullets for details
+
+Example reply:
+```bash
+READ_WRITE_MODE=1 teams-cli chat send "19:abc123@thread.v2" --html --body "<p><b>【🤖J-Bot】</b> Here is your answer.</p><hr/><p><em>🤖 Sent by J-Bot</em></p>"
+```
+
+## Database Access
+
+Query the J-Bot database for session info:
+```bash
+sqlite3 ~/.jbot/jbot.db "SELECT id, status, created_by, prompt FROM sessions ORDER BY created_at DESC LIMIT 10;"
+```
+
+Tables: sessions, messages, poll_state, bot_state, watched_chats
+
+## Starting Worker Sessions
+
+For complex tasks that need dedicated processing (code analysis, file operations, etc.),
+start a Claude Code worker session:
+
+```bash
+claude -p "<detailed task description>" --model opus --output-format json \
+  --permission-mode bypassPermissions --name "jbot-worker-<short-id>"
+```
+
+After starting a worker, tell the user it is processing. You can check worker status
+by querying the sessions table in the database.
 
 ## Decision Logic
 
-Use "reply" when you CAN answer from your own memory/knowledge:
-- Greetings, math, simple factual questions
-- Session status you already know (you received worker results)
-- Listing sessions you remember — just summarize from memory
-- Cost summaries from data you've already seen
-
-Use "new" ONLY when the task requires tools, file access, or fresh data:
-- Code analysis, bug fixing, test generation, documentation
-- Tasks that need shell commands or file system access
-- Queries that need LIVE data you don't have in memory
-
-Key: If you already have the answer in your conversation history, use "reply". \
-Do NOT spawn a new session just to look up information you already know.
-
-## Actions (return ONE as JSON)
-
-1. {"action": "reply", "reply_text": "your answer"}
-   Answer directly from memory/knowledge.
-
-2. {"action": "new", "prompt": "task description", "dedicated_chat": true/false}
-   Start a new task session. Set dedicated_chat=true for complex/verbose tasks.
-   Do NOT include "cwd" unless user provides an exact path.
-
-3. {"action": "resume", "session_id": "XXXX", "prompt": "follow-up"}
-   Continue an existing session.
-
-4. {"action": "report", "reply_text": "status update"}
-   Proactive status report.
-
-5. {"action": "stop", "session_id": "XXXX"}
-   Kill a running session.
-
-6. {"action": "new", "prompt": "...", "model": "opus"}
-   Override model. Options: "haiku" (fast), "sonnet" (balanced), "opus" (deep reasoning).
-
-## Context Management
-- You have a 1M token context window but should use it wisely.
-- After receiving worker results, mentally compress: keep the KEY FINDINGS and \
-DECISIONS, discard verbose raw output. When reporting to users, be concise.
-- If you notice your context getting long, summarize older session results \
-into brief notes so you retain the important facts without the bulk.
+- If you CAN answer from your own knowledge/memory: reply directly via teams-cli
+- If the task needs tools, file access, or heavy computation: start a worker session
+- For session status queries: check the database directly, then reply
+- For greetings, math, simple questions: reply directly
 
 ## Guidelines
-- You remember all conversations, session assignments, and results across restarts.
-- When a worker finishes, summarize key findings and report to the user.
-- For complex requests, break into subtasks and assign multiple sessions.
-- You are the SINGLE point of contact — users don't talk to sessions directly.
 
-## IMPORTANT: You can use tools!
-You have full access to the filesystem, shell, and tools. You CAN:
-- Query ~/.jbot/jbot.db directly to check sessions, costs, status
-- Read files, run commands, check system state
-- Then make an informed decision
-
-## CRITICAL OUTPUT FORMAT
-Your FINAL text response MUST be ONLY a valid JSON object. Examples:
-{"action": "reply", "reply_text": "Hello! Here are your sessions..."}
-{"action": "new", "prompt": "analyze the auth module", "dedicated_chat": true}
-{"action": "resume", "session_id": "0325-a7f3", "prompt": "continue"}
-{"action": "stop", "session_id": "0325-a7f3"}
-
-Do NOT wrap in markdown. Do NOT add explanation. ONLY the JSON object.\
+- You remember all conversations across --resume calls
+- Keep responses concise and well-formatted
+- For complex requests, break into subtasks and start multiple workers
+- You are the SINGLE point of contact — users talk to you, you coordinate everything
+- ALWAYS reply to the user via teams-cli — do NOT just return text
 """
 
-_MANAGER_SCHEMA = json.dumps({
-    "type": "object",
-    "properties": {
-        "action": {"enum": ["new", "resume", "reply", "report", "stop"]},
-        "session_id": {"type": "string"},
-        "prompt": {"type": "string"},
-        "cwd": {"type": "string"},
-        "reply_text": {"type": "string"},
-        "dedicated_chat": {"type": "boolean"},
-        "model": {"type": "string"},
-    },
-    "required": ["action"],
-})
+    if skills_content:
+        prompt += f"\n\n# Available Skills (reference guides for tools)\n{skills_content}"
+
+    return prompt
+
+
+# Cache the prompt at module load
+_MANAGER_SYSTEM_PROMPT = _build_manager_system_prompt()
 
 
 @dataclass(frozen=True)
 class ManagerDecision:
+    """Minimal fallback dataclass — kept for backward compatibility."""
     action: str
-    session_id: Optional[str] = None
-    prompt: Optional[str] = None
-    cwd: Optional[str] = None
     reply_text: Optional[str] = None
-    dedicated_chat: bool = False
-    model: Optional[str] = None
 
     @classmethod
     def from_claude_output(cls, raw_output: str) -> "ManagerDecision":
-        """Parse the JSON output from claude -p --output-format json."""
-        outer = json.loads(raw_output)
-
-        inner = outer.get("structured_output")
-        if not isinstance(inner, dict):
-            # Fallback: try parsing result as JSON
+        """Parse claude output — minimal fallback only."""
+        try:
+            outer = json.loads(raw_output)
             result_str = outer.get("result", "")
-            if isinstance(result_str, str) and result_str.strip().startswith("{"):
-                try:
-                    inner = json.loads(result_str)
-                except json.JSONDecodeError:
-                    inner = {}
-            else:
-                # Manager returned plain text — treat as reply
-                inner = {"action": "reply", "reply_text": str(result_str or inner or "")}
-
-        return cls(
-            action=inner.get("action", "reply"),
-            session_id=inner.get("session_id"),
-            prompt=inner.get("prompt"),
-            cwd=inner.get("cwd"),
-            reply_text=inner.get("reply_text"),
-            dedicated_chat=inner.get("dedicated_chat", False),
-            model=inner.get("model"),
-        )
+            return cls(action="reply", reply_text=str(result_str or ""))
+        except (json.JSONDecodeError, TypeError):
+            return cls(action="reply", reply_text="")
 
 
 _BOT_STATE_MANAGER_SESSION = "manager_session_id"
 
 
 class Manager:
-    """Stateful Manager that persists across interactions via --resume."""
+    """Stateful Manager that persists across interactions via --resume.
+
+    The Manager has full tool access and replies directly to Teams via teams-cli.
+    No JSON parsing needed — the Manager handles everything.
+    """
 
     def __init__(self, config: ClaudeConfig, db: Optional["Database"] = None) -> None:
         self._config = config
@@ -175,23 +149,21 @@ class Manager:
         except Exception:
             logger.warning("Could not load manager session from DB", exc_info=True)
 
-    async def decide(
+    async def process(
         self,
         *,
         user_message: str,
         user_email: str,
+        chat_id: str,
         context: str = "",
-    ) -> ManagerDecision:
-        """Send a message to the Manager and get a structured decision back.
+    ) -> None:
+        """Send a message to the Manager — it replies directly via teams-cli.
 
         The Manager session is resumed each time, maintaining full conversation history.
-        Context can include worker results, status updates, etc.
+        The chat_id is injected so Manager always knows where to reply.
         """
-        prompt = self._build_prompt(user_message, user_email, context)
+        prompt = self._build_prompt(user_message, user_email, chat_id, context)
 
-        # Manager uses tools freely + returns JSON as final text.
-        # No --json-schema (broken on --resume). System prompt instructs
-        # JSON output; from_claude_output parses it from result text.
         claude_cmd = _claude_command()
 
         if self._session_id:
@@ -232,9 +204,10 @@ class Manager:
                     except Exception:
                         pass
                 # Retry with a fresh session
-                return await self.decide(
+                return await self.process(
                     user_message=user_message,
                     user_email=user_email,
+                    chat_id=chat_id,
                     context=context,
                 )
 
@@ -244,7 +217,13 @@ class Manager:
             )
 
         raw = stdout.decode()
-        outer = json.loads(raw)
+        try:
+            outer = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning("Manager returned non-JSON output: %s", raw[:200])
+            return
+
+        logger.info("MGR result (first 300): %s", str(outer.get("result", ""))[:300])
 
         # Save session ID for future resume (including across restarts)
         new_sid = outer.get("session_id")
@@ -257,42 +236,41 @@ class Manager:
                 except Exception:
                     logger.warning("Failed to persist manager session_id to DB", exc_info=True)
 
-        return ManagerDecision.from_claude_output(raw)
-
     async def feed_worker_result(
         self,
         *,
         session_id: str,
         result: str,
         status: str,
-    ) -> ManagerDecision:
+        chat_id: str,
+    ) -> None:
         """Feed a worker's result back to the Manager for processing.
 
         The Manager can then decide to report to user, assign follow-up, etc.
-        Errors are caught and logged so callers (the watch loop) remain unaffected.
+        It replies directly via teams-cli to the given chat_id.
         """
         context = (
             f"[WORKER RESULT] Session [{session_id}] finished with status={status}.\n"
             f"Output:\n{result[:3000]}"
         )
         try:
-            return await self.decide(
+            await self.process(
                 user_message="",
                 user_email="system",
+                chat_id=chat_id,
                 context=context,
             )
         except Exception:
             logger.exception(
-                "feed_worker_result failed for session %s — returning no-op reply", session_id
+                "feed_worker_result failed for session %s", session_id
             )
-            return ManagerDecision(action="reply", reply_text="")
 
     def _build_prompt(
-        self, user_message: str, user_email: str, context: str
+        self, user_message: str, user_email: str, chat_id: str, context: str
     ) -> str:
-        parts = []
+        parts = [f"[REPLY TARGET] chat_id={chat_id}"]
         if context:
             parts.append(context)
         if user_message:
             parts.append(f"[USER MESSAGE from {user_email}]: {user_message}")
-        return "\n\n".join(parts) if parts else "No new input."
+        return "\n\n".join(parts)
