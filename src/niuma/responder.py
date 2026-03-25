@@ -30,7 +30,7 @@ def _make_prefix(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> 
     return f"【{bot_emoji}{display_name}】"
 
 
-def format_processing(session_id: str, bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🐴") -> str:
+def format_processing(session_id: str, bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> str:
     sig = _make_signature(bot_name, bot_emoji)
     return f"<p>session [<b>{_escape(session_id)}</b>] processing...</p>{sig}"
 
@@ -41,7 +41,7 @@ def format_result(
     error: Optional[str] = None,
     output_dir: Optional[str] = None,
     bot_name: str = _DEFAULT_BOT_NAME,
-    bot_emoji: str = "🐴",
+    bot_emoji: str = "🤖",
 ) -> str:
     sig = _make_signature(bot_name, bot_emoji)
     safe_sid = _escape(session_id)
@@ -85,41 +85,6 @@ def format_result(
     )
 
 
-def format_status(session: dict[str, Any], bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🐴") -> str:
-    sig = _make_signature(bot_name, bot_emoji)
-    status_icon = {
-        "pending": "pending", "running": "running", "completed": "completed",
-        "failed": "failed", "timeout": "timeout",
-    }.get(session["status"], "unknown")
-
-    return (
-        f"<p>{status_icon} session [<b>{session['id']}</b>] - "
-        f"{session['status']}</p>"
-        f"<p>By: {session['created_by']}<br/>"
-        f"Prompt: {_escape(session['prompt'][:100])}</p>"
-        f"{sig}"
-    )
-
-
-def format_session_list(sessions: list[dict[str, Any]], bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🐴") -> str:
-    sig = _make_signature(bot_name, bot_emoji)
-    if not sessions:
-        return f"<p>No sessions.</p>{sig}"
-
-    items = []
-    for s in sessions:
-        items.append(
-            f"<li>[<b>{s['id']}</b>] {s['status']} - "
-            f"{s['created_by']} - {_escape(s['prompt'][:60])}</li>"
-        )
-
-    return (
-        f"<p>Sessions:</p>"
-        f"<ul>{''.join(items)}</ul>"
-        f"{sig}"
-    )
-
-
 def _escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -133,7 +98,7 @@ def _md_to_html(text: str) -> str:
 
 
 class Responder:
-    def __init__(self, output_dir: str = "~/.jbot/outputs", bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🐴") -> None:
+    def __init__(self, output_dir: str = "~/.jbot/outputs", bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> None:
         self._output_dir = str(Path(output_dir).expanduser())
         self._bot_name = bot_name
         self._bot_emoji = bot_emoji
@@ -183,18 +148,6 @@ class Responder:
     ) -> None:
         html = format_result(session_id, result, error, self._output_dir, self._bot_name, self._bot_emoji)
         await self.send(chat_id, html, reply_to=reply_to)
-
-    async def send_status(
-        self, chat_id: str, session: dict[str, Any],
-        reply_to: Optional[str] = None,
-    ) -> None:
-        await self.send(chat_id, format_status(session, self._bot_name, self._bot_emoji), reply_to=reply_to)
-
-    async def send_session_list(
-        self, chat_id: str, sessions: list[dict[str, Any]],
-        reply_to: Optional[str] = None,
-    ) -> None:
-        await self.send(chat_id, format_session_list(sessions, self._bot_name, self._bot_emoji), reply_to=reply_to)
 
     async def send_text(
         self, chat_id: str, text: str,

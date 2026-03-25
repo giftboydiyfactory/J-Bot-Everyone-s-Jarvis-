@@ -291,12 +291,51 @@ class NiumaBot:
 
         return self._had_activity
 
-    async def _poll_chat(self, chat_id: str) -> None:
+    async def _poll_and_get_new(
+        self, chat_id: str, label: str = "chat",
+    ) -> tuple[list, str] | None:
+        """Common polling logic shared by _poll_chat, _poll_session_chat, _poll_manager_chat.
+
+        Returns (all_messages, new_messages, newest_id) or None on error/first-poll/no-messages.
+        Callers apply their own filtering (trigger filter, bot-message filter, etc.).
+        """
         from niuma.poller import TeamsCliError
 
         try:
             raw = await self._poller.poll_chat(chat_id)
-            self._backoff_seconds[chat_id] = 0  # reset on success
+        except (TeamsCliError, RuntimeError):
+            raise  # Let caller handle backoff / error specifics
+
+        messages = self._poller.parse_messages(raw)
+        if not messages:
+            return None
+
+        try:
+            newest_id = max(messages, key=lambda m: int(m.id)).id
+        except ValueError:
+            newest_id = messages[0].id
+
+        last_seen = await self._db.get_poll_state(chat_id)
+
+        if last_seen is None:
+            await self._db.set_poll_state(chat_id, newest_id)
+            logger.info("First poll of %s %s: skipping existing messages", label, chat_id[:20])
+            return None
+
+        new_messages = self._poller.filter_new(messages, last_seen)
+        await self._db.set_poll_state(chat_id, newest_id)
+
+        if not new_messages:
+            return None
+
+        return new_messages, newest_id
+
+    async def _poll_chat(self, chat_id: str) -> None:
+        from niuma.poller import TeamsCliError
+
+        try:
+            result = await self._poll_and_get_new(chat_id, label="trigger chat")
+            self._backoff_seconds[chat_id] = 0
         except TeamsCliError as e:
             if e.exit_code == 5:  # rate limited
                 logger.warning("Rate limited on %s, backing off", chat_id)
@@ -319,35 +358,17 @@ class NiumaBot:
             logger.error("Poll failed for %s: %s", chat_id, e)
             return
 
-        messages = self._poller.parse_messages(raw)
-        if not messages:
+        if result is None:
             return
 
-        # Find the newest message ID (messages may be newest-first from API)
-        try:
-            newest_id = max(messages, key=lambda m: int(m.id)).id
-        except ValueError:
-            newest_id = messages[0].id
+        new_messages, _ = result
 
-        last_seen = await self._db.get_poll_state(chat_id)
-
-        # Issue 2: On first startup (no poll_state), skip all existing messages
-        # by marking the newest as already seen — only process future messages.
-        if last_seen is None:
-            await self._db.set_poll_state(chat_id, newest_id)
-            logger.info("First poll of chat %s: skipping existing messages, last_seen=%s", chat_id[:20], newest_id)
+        # Apply trigger filter (only triggered messages in trigger chats)
+        triggered = self._poller.filter_triggered(new_messages)
+        if not triggered:
             return
 
-        triggered = self._poller.filter_triggered(messages)
-        new_messages = self._poller.filter_new(triggered, last_seen)
-
-        # Update poll state FIRST to prevent re-processing if handler is slow
-        await self._db.set_poll_state(chat_id, newest_id)
-
-        if not new_messages:
-            return
-
-        for msg in new_messages:
+        for msg in triggered:
             if not self._is_allowed(msg.sender_email):
                 logger.info(
                     "Ignoring message from unauthorized user: %s",
@@ -363,38 +384,15 @@ class NiumaBot:
 
     async def _poll_session_chat(self, chat_id: str) -> None:
         """Poll a session-dedicated chat. All messages auto-route to the bound session."""
-        from niuma.poller import TeamsCliError
-
         try:
-            raw = await self._poller.poll_chat(chat_id)
-        except (TeamsCliError, RuntimeError):
+            result = await self._poll_and_get_new(chat_id, label="session chat")
+        except Exception:
             return
 
-        messages = self._poller.parse_messages(raw)
-        if not messages:
+        if result is None:
             return
 
-        try:
-            newest_id = max(messages, key=lambda m: int(m.id)).id
-        except ValueError:
-            newest_id = messages[0].id
-
-        last_seen = await self._db.get_poll_state(chat_id)
-
-        # Issue 2: On first startup (no poll_state), skip all existing messages.
-        if last_seen is None:
-            await self._db.set_poll_state(chat_id, newest_id)
-            logger.info("First poll of session chat %s: skipping existing messages", chat_id[:20])
-            return
-
-        # Filter new messages (no trigger needed in session chats)
-        new_messages = self._poller.filter_new(messages, last_seen)
-
-        # Update poll state FIRST to prevent re-processing if handler is slow
-        await self._db.set_poll_state(chat_id, newest_id)
-
-        if not new_messages:
-            return
+        new_messages, _ = result
 
         # Find the bound session
         session = await self._db.get_session_by_chat_id(chat_id)
@@ -405,8 +403,7 @@ class NiumaBot:
             if not self._is_allowed(msg.sender_email):
                 continue
 
-            # Issue 4: Skip bot's own messages (check both raw body and signature).
-            # parse_messages already strips HTML, so the check on msg.body is correct.
+            # Skip bot's own messages
             if "Sent by J-Bot" in msg.body_raw or "ai-pim-utils" in msg.body_raw or "Sent by niuma" in msg.body_raw or "【🤖J-Bot】" in msg.body:
                 continue
 
@@ -441,37 +438,15 @@ class NiumaBot:
 
     async def _poll_manager_chat(self, chat_id: str) -> None:
         """Poll the Manager's dedicated chat. Messages here go directly to Manager."""
-        from niuma.poller import TeamsCliError
-
         try:
-            raw = await self._poller.poll_chat(chat_id)
-        except (TeamsCliError, RuntimeError):
+            result = await self._poll_and_get_new(chat_id, label="manager chat")
+        except Exception:
             return
 
-        messages = self._poller.parse_messages(raw)
-        if not messages:
+        if result is None:
             return
 
-        try:
-            newest_id = max(messages, key=lambda m: int(m.id)).id
-        except ValueError:
-            newest_id = messages[0].id
-
-        last_seen = await self._db.get_poll_state(chat_id)
-
-        # Issue 2: On first startup (no poll_state), skip all existing messages.
-        if last_seen is None:
-            await self._db.set_poll_state(chat_id, newest_id)
-            logger.info("First poll of manager chat %s: skipping existing messages", chat_id[:20])
-            return
-
-        new_messages = self._poller.filter_new(messages, last_seen)
-        if not new_messages:
-            await self._db.set_poll_state(chat_id, newest_id)
-            return
-
-        # Update poll state FIRST to prevent re-processing if handler is slow
-        await self._db.set_poll_state(chat_id, newest_id)
+        new_messages, _ = result
 
         for msg in new_messages:
             if not self._is_allowed(msg.sender_email):
