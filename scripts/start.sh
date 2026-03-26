@@ -33,21 +33,10 @@ bash "$REPO_DIR/scripts/migrate.sh" 2>/dev/null || true
 
 mkdir -p "$HOME/.jbot"
 
-# 3. Pre-flight auth check
+# 3. Pre-flight auth check (Graph API only — no teams-cli needed)
 echo "  [3/4] Checking auth..."
 
-# Check teams-cli read auth (still needed for polling)
-if ! teams-cli auth status --json 2>/dev/null | grep -q '"authenticated": true'; then
-    echo ""
-    echo "  ⚠️  teams-cli not authenticated. Starting login..."
-    echo "  Follow the device code instructions below:"
-    echo ""
-    teams-cli auth login
-    echo ""
-fi
-
-# Test Graph API token refresh (used for sending messages)
-SEND_CHECK=$(PYTHONPATH="$REPO_DIR/src" python3 -c "
+AUTH_CHECK=$(PYTHONPATH="$REPO_DIR/src" python3 -c "
 from niuma.teams_api import _get_access_token
 try:
     token = _get_access_token()
@@ -55,11 +44,15 @@ try:
 except Exception as e:
     print(f'FAIL: {e}')
 " 2>&1)
-if echo "$SEND_CHECK" | grep -q "FAIL"; then
-    echo "  ⚠️  Graph API token refresh failed."
-    echo "  Run: teams-cli auth login (to refresh token cache)"
+
+if echo "$AUTH_CHECK" | grep -q "FAIL"; then
     echo ""
-    teams-cli auth login
+    echo "  ⚠️  Graph API token not available."
+    echo "  Run this once to create the token cache:"
+    echo "    teams-cli auth login"
+    echo ""
+    echo "  After login, run start.sh again."
+    exit 1
 fi
 
 # Check claude CLI
@@ -68,7 +61,7 @@ if ! which claude >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "  ✅ Auth OK (read: teams-cli, write: Graph API)"
+echo "  ✅ Auth OK (Graph API — no teams-cli needed for polling/sending)"
 
 # 4. Start watchdog loop (nohup + background = survives SSH disconnect)
 echo "  [4/4] Starting watchdog..."
