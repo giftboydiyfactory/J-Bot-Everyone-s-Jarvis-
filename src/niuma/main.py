@@ -30,6 +30,19 @@ _BOT_STATE_MANAGER_CHAT = "manager_chat_id"
 _GRACEFUL_SHUTDOWN_TIMEOUT = 30  # seconds to wait for running workers on SIGTERM/SIGINT
 
 
+def _send_alert(title: str, message: str) -> None:
+    """Send a system alert via macOS notification + log."""
+    logger.critical("ALERT: %s — %s", title, message)
+    try:
+        import subprocess
+        subprocess.Popen([
+            "osascript", "-e",
+            f'display notification "{message}" with title "🤖 J-Bot Alert" subtitle "{title}" sound name "Basso"'
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass  # Non-fatal — alert is also in logs
+
+
 class NiumaBot:
     def __init__(self, config: NiumaConfig) -> None:
         self._config = config
@@ -43,6 +56,9 @@ class NiumaBot:
         self._config_mtime: float = 0.0
         self._backoff_seconds: dict[str, int] = {}
         self._background_tasks: set[asyncio.Task] = set()
+        self._consecutive_failures: int = 0
+        self._alert_threshold: int = 5  # Alert after 5 consecutive failures
+        self._last_alert_time: float = 0
 
     def _fire_and_track(self, coro: "asyncio.Coroutine") -> asyncio.Task:
         """Schedule a coroutine as a background task, keeping a strong reference."""
@@ -229,17 +245,19 @@ class NiumaBot:
             try:
                 had_activity = await self.poll_once()
                 if had_activity:
-                    self._poll_interval = 5  # Reset to fast polling on activity
+                    self._poll_interval = 5
                     self._idle_cycles = 0
+                    self._consecutive_failures = 0
                 else:
                     self._idle_cycles += 1
-                    # Ramp up: 5→10→15→20→30→45→60
                     if self._idle_cycles > 3:
                         self._poll_interval = min(
                             self._poll_interval + 5, self._poll_max
                         )
             except Exception:
                 logger.exception("Error in poll cycle")
+                self._consecutive_failures += 1
+                self._check_alert()
             await asyncio.sleep(self._poll_interval)
 
     async def _check_config_reload(self) -> None:
@@ -258,6 +276,30 @@ class NiumaBot:
                 logger.info("Config reloaded from %s", config_path)
         except Exception:
             pass  # Non-fatal
+
+    def _check_alert(self) -> None:
+        """Send alert if consecutive failures exceed threshold."""
+        import time
+        now = time.time()
+        if self._consecutive_failures >= self._alert_threshold:
+            # Only alert every 5 minutes to avoid spam
+            if now - self._last_alert_time > 300:
+                self._last_alert_time = now
+                _send_alert(
+                    f"{self._consecutive_failures} consecutive poll failures",
+                    "Teams API may be down or auth expired. Run: teams-cli auth login"
+                )
+
+    def _record_poll_failure(self) -> None:
+        """Record a poll failure and check if alert needed."""
+        self._consecutive_failures += 1
+        self._check_alert()
+
+    def _record_poll_success(self) -> None:
+        """Reset failure counter on success."""
+        if self._consecutive_failures > 0:
+            logger.info("Poll recovered after %d failures", self._consecutive_failures)
+        self._consecutive_failures = 0
 
     async def poll_once(self) -> bool:
         """Single poll cycle. Returns True if any user message was processed."""
@@ -336,7 +378,9 @@ class NiumaBot:
         try:
             result = await self._poll_and_get_new(chat_id, label="trigger chat")
             self._backoff_seconds[chat_id] = 0
+            self._record_poll_success()
         except TeamsCliError as e:
+            self._record_poll_failure()
             if e.exit_code == 5:  # rate limited
                 logger.warning("Rate limited on %s, backing off", chat_id)
                 await asyncio.sleep(min(self._backoff_seconds.get(chat_id, 0) or 30, 300))
