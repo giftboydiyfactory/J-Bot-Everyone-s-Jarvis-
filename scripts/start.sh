@@ -9,23 +9,23 @@ PIDFILE="$HOME/.jbot/watchdog.pid"
 
 # 1. Kill old processes
 echo "🤖 J-Bot: starting..."
-echo "  [1/3] Killing old processes..."
+echo "  [1/4] Killing old processes..."
 # Kill old watchdog
 if [ -f "$PIDFILE" ]; then
     kill $(cat "$PIDFILE") 2>/dev/null || true
     rm -f "$PIDFILE"
 fi
-pkill -9 -f "niuma" 2>/dev/null || true
+pkill -f "niuma.main" 2>/dev/null || true
 sleep 1
 
 # 2. Ensure venv
 if [ ! -d "$VENV" ]; then
-    echo "  [2/3] Creating venv..."
+    echo "  [2/4] Creating venv..."
     python3 -m venv "$VENV"
     source "$VENV/bin/activate"
     pip install -e "$REPO_DIR[dev]" --quiet
 else
-    echo "  [2/3] Venv exists, activating..."
+    echo "  [2/4] Venv exists, activating..."
     source "$VENV/bin/activate"
 fi
 
@@ -34,8 +34,45 @@ bash "$REPO_DIR/scripts/migrate.sh" 2>/dev/null || true
 
 mkdir -p "$HOME/.jbot"
 
-# 3. Start watchdog loop (nohup + background = survives SSH disconnect)
-echo "  [3/3] Starting watchdog..."
+# 3. Pre-flight auth check
+echo "  [3/4] Checking auth..."
+
+# Check teams-cli read auth
+if ! teams-cli auth status --json 2>/dev/null | grep -q '"authenticated": true'; then
+    echo ""
+    echo "  ⚠️  teams-cli not authenticated. Starting login..."
+    echo "  Follow the device code instructions below:"
+    echo ""
+    teams-cli auth login
+    echo ""
+fi
+
+# Check teams-cli write auth (READ_WRITE_MODE=1)
+# Try a no-op command to verify write scope
+WRITE_CHECK=$(READ_WRITE_MODE=1 teams-cli auth status --json 2>&1 || true)
+if echo "$WRITE_CHECK" | grep -qi "Write access required\|authenticate\|device code"; then
+    echo ""
+    echo "  ⚠️  teams-cli write mode not authorized."
+    echo "  Please complete the device code login below."
+    echo "  (This grants J-Bot permission to send messages)"
+    echo ""
+    READ_WRITE_MODE=1 teams-cli auth login
+    echo ""
+    echo "  ✅ Write access authorized!"
+else
+    echo "  ✅ Write mode OK"
+fi
+
+# Check claude CLI
+if ! which claude >/dev/null 2>&1; then
+    echo "  ⚠️  claude CLI not found. Please install it first."
+    exit 1
+fi
+
+echo "  ✅ Auth OK (read + write)"
+
+# 4. Start watchdog loop (nohup + background = survives SSH disconnect)
+echo "  [4/4] Starting watchdog..."
 nohup bash -c '
 VENV="'"$VENV"'"
 PIDFILE="'"$PIDFILE"'"

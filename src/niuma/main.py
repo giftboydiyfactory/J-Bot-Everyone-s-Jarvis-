@@ -277,6 +277,17 @@ class NiumaBot:
         except Exception:
             pass  # Non-fatal
 
+    async def _try_refresh_token(self) -> None:
+        """Attempt to refresh the Teams API token programmatically."""
+        try:
+            from niuma.teams_api import _get_access_token
+            token = await asyncio.to_thread(_get_access_token)
+            if token:
+                logger.info("Token refreshed successfully via refresh token")
+        except Exception as exc:
+            logger.error("Token refresh failed: %s. Manual login needed: teams-cli auth login", exc)
+            _send_alert("Auth expired", "Run: teams-cli auth login")
+
     def _check_alert(self) -> None:
         """Send alert if consecutive failures exceed threshold."""
         import time
@@ -393,7 +404,8 @@ class NiumaBot:
                 await asyncio.sleep(self._backoff_seconds[chat_id])
                 return
             elif e.exit_code == 2:  # auth expired
-                logger.error("Auth expired for teams-cli, skipping cycle")
+                logger.error("Auth expired — attempting token refresh")
+                await self._try_refresh_token()
                 return
             else:
                 logger.error("Poll failed for %s: %s", chat_id, e)
