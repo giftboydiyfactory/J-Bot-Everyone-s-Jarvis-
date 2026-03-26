@@ -1,114 +1,81 @@
 # J-Bot (Everyone's Jarvis)
 
-A Teams chat bot powered by Claude Code that monitors group chats for `@jbot` messages and routes them through a stateful **Manager** session that orchestrates Claude Code worker sessions.
+Your AI engineering assistant, managed through Microsoft Teams chat. Powered by Claude Code (Opus 1M).
 
-<!-- TODO (web-dashboard): A web dashboard for session monitoring is planned.
-     It will provide real-time status, cost summaries, and worker logs via HTTP. -->
+## What It Does
 
-## Overview
+Type `@jbot` in a Teams chat → J-Bot reads your message → does the work → replies directly in chat.
 
-J-Bot integrates Microsoft Teams with Claude Code to enable AI-powered task execution directly from Teams chat. When a user mentions `@jbot` in a Teams chat, the bot:
+J-Bot is a **persistent AI coordinator** with full tool access. It can:
+- Query databases, read/write files, run shell commands
+- Start parallel Claude Code task sessions for complex work
+- Remember all conversations across restarts (1M context)
+- Report progress and results directly to Teams
 
-1. **Polls** Teams for new messages containing the trigger
-2. **Routes** the message to the stateful Manager Claude session
-3. **Executes** tasks via Claude Code worker sessions managed by the Manager
-4. **Replies** with results back to Teams
+## Quick Start
 
-This is an internal NVIDIA tool for engineering teams who need Claude Code execution capabilities within their Teams workflows.
+```bash
+# 1. Clone & install
+git clone https://github.com/giftboydiyfactory/J-Bot-Everyone-s-Jarvis-.git
+cd J-Bot-Everyone-s-Jarvis-
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+# 2. Configure
+mkdir -p ~/.jbot
+cp config.yaml.example ~/.jbot/config.yaml
+# Edit: teams.chat_ids, security.admin_users
+
+# 3. Authenticate
+teams-cli auth login
+claude auth login
+
+# 4. Run
+bash scripts/start.sh
+```
 
 ## Architecture
 
-### Manager Session
+```
+Teams Chat (@jbot message)
+  └─ Poller (adaptive 5s→60s)
+      └─ Handler (acknowledgment + forwarding)
+          └─ Coordinator (persistent Opus session, --resume)
+              ├─ Replies directly via teams-cli
+              ├─ Queries DB, reads files, runs commands
+              ├─ Starts task sessions for complex work
+              └─ Reports results back to chat
+```
 
-The bot uses a **persistent Manager session** (a long-lived Claude Code session) as the single routing brain:
+### How It Works
 
-- The Manager remembers all previous conversations, worker assignments, and results across restarts
-- The Manager's `session_id` and dedicated chat ID are saved to the SQLite DB so bot restarts resume the same Manager instance
-- All user messages from configured trigger chats flow through the Manager
-- The Manager decides: answer directly (`reply`), start a new worker (`new`), resume existing worker (`resume`), or proactively report status (`report`)
-
-### Dedicated Manager Chat
-
-On first start, the bot creates a dedicated Teams chat for the Manager. All routing decisions and worker results are visible there. On restart, the same chat is reused (persisted in DB).
-
-### Worker Sessions
-
-Workers are Claude Code sessions spawned by the Manager's instructions:
-
-- Each worker gets a `session_id` (format: `MMDD-XXXX`, e.g. `0320-a7f3`)
-- Workers have access to the file system, shell commands, and Teams via `teams-cli`
-- Complex tasks can get a dedicated Teams chat for their output
-- Worker results are fed back to the Manager for context tracking
+1. **Poller** reads Teams chats every 5-60s (adaptive — fast when active, slow when idle)
+2. **Handler** sends "Received — thinking..." and forwards the message to the Coordinator
+3. **Coordinator** (Opus 1M, persistent session) decides what to do:
+   - Simple questions → replies directly via `teams-cli`
+   - Database queries → runs `sqlite3` and replies
+   - Complex tasks → starts a Claude Code task session
+4. **Task sessions** run independently, report progress, and feed results back
 
 ### Module Layout
 
 ```
-src/niuma/   (internal package name)
-  main.py       — CLI entry point and J-Bot lifecycle (coordinator)
-  handler.py    — Inbound message routing and dispatch logic
-  watcher.py    — Session watching: polls DB until worker finishes, sends result
-  manager.py    — Stateful Manager session (the team lead)
-  session.py    — Claude Code worker session management
-  poller.py     — Teams chat polling and message parsing
-  responder.py  — Sending messages back to Teams
-  db.py         — SQLite database (sessions, messages, poll_state, bot_state)
-  config.py     — Configuration loading and validation
-  scanner.py    — Scan ~/.claude/projects/ to discover Claude sessions
-  teams_api.py  — Teams API helpers (create chat, etc.)
-  dispatcher.py — Legacy stateless dispatcher (kept for reference)
-```
-
-## Prerequisites
-
-- **Python 3.9+**
-- **teams-cli**: Authenticated via `teams-cli auth login`
-- **claude CLI**: Authenticated via `claude auth login`
-- Access to Teams chats where the bot will run
-- Claude API account with model access
-
-## Installation
-
-Clone the repository and install in development mode:
-
-```bash
-git clone https://github.com/giftboydiyfactory/J-Bot-Everyone-s-Jarvis-.git
-cd J-Bot-Everyone-s-Jarvis-
-pip install -e ".[dev]"
+src/niuma/          # Internal package name (kept for backward compat)
+  main.py           # CLI entry point, polling loop, adaptive scheduling
+  handler.py        # Message forwarding + error handling (simplified)
+  manager.py        # Coordinator session (Opus, full tool access, direct replies)
+  session.py        # Task session lifecycle (start/resume/stop)
+  watcher.py        # Monitors task sessions, heartbeats, progress reporting
+  poller.py         # Teams chat polling and message parsing
+  responder.py      # Teams message formatting and sending
+  db.py             # SQLite: sessions, messages, poll_state, bot_state
+  config.py         # YAML config loading and validation
+  teams_api.py      # Microsoft Graph API helpers (chat creation, members)
 ```
 
 ## Configuration
 
-### Setup
-
-Create the configuration directory and copy the example config:
-
-```bash
-mkdir -p ~/.jbot
-cp config.yaml.example ~/.jbot/config.yaml
-```
-
-### Get Chat ID
-
-To find your Teams chat ID, use:
-
-```bash
-teams-cli chat list --json
-```
-
-Look for the chat you want to monitor and copy the `id` field (format: `19:xxxxx@thread.v2`).
-
-### Edit Configuration
-
-Open `~/.jbot/config.yaml` and update:
-
-- **teams.chat_ids**: Add your chat IDs from the list above
-- **security.allowed_users**: Add email addresses of users who can trigger the bot
-- **security.admin_users**: Add email addresses of admin users (can list all sessions, stop others)
-- **claude.dispatcher_model**: Model for the Manager session (default: `sonnet`)
-- **claude.worker_model**: Model for executing tasks (default: `sonnet`)
-- **storage.db_path**: Path to SQLite database (default: `~/.jbot/jbot.db`)
-
-Example minimal config:
+### `~/.jbot/config.yaml`
 
 ```yaml
 bot:
@@ -118,137 +85,118 @@ bot:
 
 teams:
   chat_ids:
-    - "19:abc123@thread.v2"
-  trigger: "@jbot"
-  poll_interval: 60
+    - "19:your-chat-id@thread.v2"
+  poll_interval: 60      # Max interval (adaptive: starts at 5s)
 
 claude:
-  dispatcher_model: "sonnet"
-  worker_model: "sonnet"
-  max_concurrent: 5
+  dispatcher_model: "opus"   # Coordinator model
+  worker_model: "opus"       # Task session model
+  max_concurrent: 5          # Max parallel task sessions
+  session_timeout: 86400     # 24h
+  permission_mode: "auto"
+  default_cwd: "~"
 
 security:
   allowed_users:
-    - "your.email@nvidia.com"
+    - "you@nvidia.com"
   admin_users:
-    - "your.email@nvidia.com"
+    - "you@nvidia.com"
 
 storage:
   db_path: "~/.jbot/jbot.db"
+
+logging:
+  level: "INFO"
+  file: "~/.jbot/jbot.log"
 ```
+
+### Finding Your Chat ID
+
+```bash
+teams-cli chat list --json
+```
+
+Look for `id` field (format: `19:xxxxx@thread.v2`).
 
 ## Running
 
-### Foreground
-
-Start the bot and watch logs in the current terminal:
-
-```bash
-jbot
-```
-
-### Daemon Mode
-
-Run in the background (similar to nohup):
-
-```bash
-jbot --daemon
-```
-
-Logs are written to `~/.jbot/jbot.log`.
-
-### Custom Config Path
-
-Specify a non-default config file:
-
-```bash
-jbot -c /path/to/config.yaml
-```
-
-## Persistence Across Restarts
-
-The SQLite database at `~/.jbot/jbot.db` is **persistent** — do not delete it between restarts. It stores:
-
-- All session history and results
-- The Manager's Claude `session_id` (resumed on restart)
-- The Manager's dedicated Teams chat ID (reused on restart)
-- Poll state (last-seen message IDs per chat — new messages only, no duplicates)
-- Total cost tracking across all sessions
-
-To check accumulated cost:
-
-```python
-from niuma.db import Database
-import asyncio
-
-async def show_cost():
-    db = Database("~/.jbot/jbot.db")
-    await db.init()
-    total = await db.get_total_cost_usd()
-    print(f"Total cost: ${total:.4f}")
-    await db.close()
-
-asyncio.run(show_cost())
-```
-
-## Graceful Shutdown
-
-On `SIGTERM` or `SIGINT`, the bot:
-
-1. Stops accepting new poll cycles
-2. Notifies the Manager chat that shutdown is in progress
-3. Waits up to 30 seconds for running worker watchers to finish
-4. Cancels any remaining tasks and closes the DB connection cleanly
+| Method | Command | Notes |
+|--------|---------|-------|
+| **Watchdog** (recommended) | `bash scripts/start.sh` | Auto-restart on crash, survives SSH |
+| **Foreground** | `jbot` | Logs to terminal |
+| **Daemon** | `jbot --daemon` | Logs to `~/.jbot/jbot.log` |
+| **Stop** | `bash scripts/stop.sh` | Kills watchdog + bot |
+| **Full Reset** | `bash scripts/reset.sh` | Clears all state, fresh start |
 
 ## Usage in Teams
 
-Once running, use the bot in Teams by mentioning `@jbot` followed by your request:
+| What You Say | What Happens |
+|-------------|--------------|
+| `@jbot hello` | Coordinator replies directly |
+| `@jbot list my sessions` | Coordinator queries DB, replies with table |
+| `@jbot analyze src/ for bugs` | Coordinator starts task session, reports findings |
+| `@jbot what is 17 * 23?` | Coordinator computes and replies |
+| `@jbot check CI status` | Coordinator runs commands, replies |
 
-| Command | Example | Behavior |
-|---------|---------|----------|
-| **New Task** | `@jbot create a Python script that prints "hello world"` | Manager delegates a new worker session |
-| **Resume Session** | `@jbot continue session 0320-a7f3` | Manager resumes an existing worker session |
-| **Ask Manager** | `@jbot what sessions are running?` | Manager answers from its memory |
-| **Quick Reply** | `@jbot what is 2+2?` | Manager answers directly (no worker created) |
+The Coordinator decides whether to answer directly or start a task session based on complexity.
 
-The Manager analyzes each message and determines the appropriate action. Session results are posted back to the chat when complete.
+## Features
+
+- **Adaptive Polling**: 5s when active → gradually increases to 60s when idle
+- **Persistent Memory**: Coordinator remembers all conversations across restarts (--resume)
+- **Parallel Task Sessions**: Up to 5 concurrent Claude Code sessions
+- **Live Progress**: 60-second heartbeats showing what task sessions are doing
+- **Auto-restart Watchdog**: `start.sh` uses nohup + while loop, survives SSH disconnect
+- **Self-message Detection**: Bot recognizes its own messages to prevent loops
+- **Role-based Access**: Admin users get full access, members are restricted
+- **Cost Tracking**: Per-session cost stored in DB
+- **Skills System**: Skills in `skills/` auto-loaded into task session prompts
+
+## Persistence
+
+The SQLite database (`~/.jbot/jbot.db`) stores:
+- Coordinator session ID (resumed on restart)
+- Coordinator Teams chat ID (reused on restart)
+- All task session history, results, and costs
+- Poll state (last-seen message IDs per chat)
+
+**Do not delete** `~/.jbot/jbot.db` between restarts.
 
 ## Development
 
-### Install Development Dependencies
-
 ```bash
+# Install dev dependencies
 pip install -e ".[dev]"
-```
 
-### Run Tests
+# Run tests (52 tests)
+pytest tests/ -v
 
-```bash
-python3.9 -m pytest tests/ -v
-```
-
-Check coverage:
-
-```bash
+# Coverage
 pytest --cov=src/niuma --cov-report=term-missing
 ```
 
-### Project Structure Rationale
+## Migration from `~/.niuma/`
 
-- `handler.py` contains all routing logic so `main.py` stays a thin coordinator
-- `watcher.py` contains session-watching so it can be tested independently
-- `manager.py` is the central brain; state is persisted via `db.py`'s `bot_state` table
+If upgrading from the old `niuma` naming:
+
+```bash
+bash scripts/migrate.sh
+```
+
+This copies config, DB, and logs from `~/.niuma/` to `~/.jbot/`, renaming files and updating paths.
 
 ## Troubleshooting
 
-**Bot not starting**: Check `~/.jbot/jbot.log` for errors. Ensure config.yaml is valid YAML and all paths are correct.
+| Problem | Fix |
+|---------|-----|
+| Bot not starting | Check `~/.jbot/jbot.log` for errors |
+| Messages not detected | Verify chat ID and `allowed_users` in config |
+| `teams-cli` auth expired | Run `teams-cli auth login` |
+| `claude` auth expired | Run `claude auth login` |
+| Coordinator lost memory | Don't delete `~/.jbot/jbot.db`. Use `scripts/reset.sh` only for full reset |
+| Infinite "thinking..." loop | Self-message detection failed — check "Sent by J-Bot" in bot messages |
+| Task session timeout | Increase `session_timeout` in config (default: 86400s = 24h) |
 
-**Messages not being detected**: Verify the chat ID is correct and the bot has access to the chat. Check that allowed_users includes the sender's email.
+## License
 
-**teams-cli auth expired**: Run `teams-cli auth login` to refresh authentication.
-
-**claude CLI auth expired**: Run `claude auth login` to refresh authentication.
-
-**Sessions timing out**: Check that claude CLI is working: `claude --version`. Increase `session_timeout` in config if needed (default: 86400 seconds = 24 hours).
-
-**Manager lost context after restart**: The Manager session_id is persisted in the DB. If the DB was deleted, the Manager starts fresh with no prior memory.
+Internal NVIDIA tool — Interconnect Shanghai team.
