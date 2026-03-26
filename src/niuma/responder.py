@@ -107,33 +107,19 @@ class Responder:
         self, chat_id: str, html_body: str,
         reply_to: Optional[str] = None,
     ) -> None:
-        """Send an HTML message to a Teams chat.
+        """Send an HTML message to a Teams chat via Graph API.
 
-        Note: Teams chat API does not support thread replies (only channel messages do).
-        The reply_to parameter is accepted but currently unused — kept for future
-        channel support.
+        Uses Graph API directly instead of teams-cli subprocess.
+        This eliminates the write-mode auth issue — uses the same
+        refresh token as read operations.
         """
         html_body = f"{html_body}{_BOT_MARKER}"
-        env = {**os.environ, "READ_WRITE_MODE": "1"}
-        proc = await asyncio.create_subprocess_exec(
-            "teams-cli", "chat", "send", chat_id,
-            "--html", "--body", html_body,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-        except asyncio.TimeoutError:
-            proc.kill()
-            logger.warning("teams-cli send timed out after 30s for chat %s", chat_id)
-            return
-        if proc.returncode != 0:
-            logger.error(
-                "Failed to send Teams message (exit %d): %s",
-                proc.returncode, stderr.decode().strip()[:200],
-            )
-            raise RuntimeError(f"teams-cli send failed: {stderr.decode().strip()}")
+            from niuma.teams_api import send_chat_message_async
+            await send_chat_message_async(chat_id=chat_id, html_body=html_body)
+        except Exception as exc:
+            logger.error("Failed to send Teams message: %s", str(exc)[:200])
+            raise
 
     async def send_processing(
         self, chat_id: str, session_id: str,

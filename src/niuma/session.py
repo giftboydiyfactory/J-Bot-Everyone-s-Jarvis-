@@ -51,6 +51,8 @@ _CACHED_SKILLS = _load_skills()
 
 
 def _build_worker_safety_prompt(bot_name: str = "jbot", chat_id: str = "") -> str:
+    import pathlib
+    repo_dir = str(pathlib.Path(__file__).parent.parent.parent)
     prompt = (
         f"You are a {bot_name} task session managed by J-Bot. "
         "Execute the user's request thoroughly. "
@@ -61,7 +63,9 @@ def _build_worker_safety_prompt(bot_name: str = "jbot", chat_id: str = "") -> st
         f"- J-Bot DB: ~/.jbot/jbot.db (SQLite, tables: sessions, messages, poll_state)\n"
         "- Claude session history: ~/.claude/projects/*/  (JSONL files per session)\n"
         "- J-Bot source: the J-Bot source directory (wherever you cloned the repo)\n"
-        "- teams-cli: can read/send Teams messages (use READ_WRITE_MODE=1 for sends)\n"
+        "- teams-cli: can read Teams messages\n"
+        "- jbot-send.sh: send Teams messages via Graph API (PREFERRED over teams-cli send)\n"
+        "  NOTE: Always use jbot-send.sh instead of teams-cli chat send\n"
         "When asked to manage sessions, scan history, create groups, import sessions, etc. "
         "you can directly access these resources.\n\n"
     )
@@ -70,8 +74,8 @@ def _build_worker_safety_prompt(bot_name: str = "jbot", chat_id: str = "") -> st
         prompt += (
             "## Progress Reporting\n"
             f"You can report progress directly to your Teams chat:\n"
-            f"  READ_WRITE_MODE=1 teams-cli chat send \"{chat_id}\" --html "
-            f"--body \"<p><b>【🤖J-Bot】</b> your message</p>"
+            f"  bash {repo_dir}/scripts/jbot-send.sh \"{chat_id}\" "
+            f"\"<p><b>【🤖J-Bot】</b> your message</p>"
             f"<hr/><p><em>🤖 Sent by J-Bot</em></p>\"\n"
             "Use this to send:\n"
             "- Progress updates on long tasks (e.g. 'Scanning 500 files...')\n"
