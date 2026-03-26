@@ -10,7 +10,6 @@ PIDFILE="$HOME/.jbot/watchdog.pid"
 # 1. Kill old processes
 echo "🤖 J-Bot: starting..."
 echo "  [1/4] Killing old processes..."
-# Kill old watchdog
 if [ -f "$PIDFILE" ]; then
     kill $(cat "$PIDFILE") 2>/dev/null || true
     rm -f "$PIDFILE"
@@ -37,7 +36,7 @@ mkdir -p "$HOME/.jbot"
 # 3. Pre-flight auth check
 echo "  [3/4] Checking auth..."
 
-# Check teams-cli read auth
+# Check teams-cli read auth (still needed for polling)
 if ! teams-cli auth status --json 2>/dev/null | grep -q '"authenticated": true'; then
     echo ""
     echo "  ⚠️  teams-cli not authenticated. Starting login..."
@@ -47,20 +46,20 @@ if ! teams-cli auth status --json 2>/dev/null | grep -q '"authenticated": true';
     echo ""
 fi
 
-# Check teams-cli write auth (READ_WRITE_MODE=1)
-# Try a no-op command to verify write scope
-WRITE_CHECK=$(READ_WRITE_MODE=1 teams-cli auth status --json 2>&1 || true)
-if echo "$WRITE_CHECK" | grep -qi "Write access required\|authenticate\|device code"; then
+# Test Graph API token refresh (used for sending messages)
+SEND_CHECK=$(PYTHONPATH="$REPO_DIR/src" python3 -c "
+from niuma.teams_api import _get_access_token
+try:
+    token = _get_access_token()
+    print('OK' if token else 'FAIL')
+except Exception as e:
+    print(f'FAIL: {e}')
+" 2>&1)
+if echo "$SEND_CHECK" | grep -q "FAIL"; then
+    echo "  ⚠️  Graph API token refresh failed."
+    echo "  Run: teams-cli auth login (to refresh token cache)"
     echo ""
-    echo "  ⚠️  teams-cli write mode not authorized."
-    echo "  Please complete the device code login below."
-    echo "  (This grants J-Bot permission to send messages)"
-    echo ""
-    READ_WRITE_MODE=1 teams-cli auth login
-    echo ""
-    echo "  ✅ Write access authorized!"
-else
-    echo "  ✅ Write mode OK"
+    teams-cli auth login
 fi
 
 # Check claude CLI
@@ -69,7 +68,7 @@ if ! which claude >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "  ✅ Auth OK (read + write)"
+echo "  ✅ Auth OK (read: teams-cli, write: Graph API)"
 
 # 4. Start watchdog loop (nohup + background = survives SSH disconnect)
 echo "  [4/4] Starting watchdog..."

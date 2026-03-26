@@ -47,12 +47,26 @@ def _get_access_token() -> str:
     client_id = None
     tenant_id = None
 
+    # Prefer the write-capable client (has Chat.ReadWrite scope)
+    # Try all refresh tokens, preferring client_id 29c0325f (write-capable)
+    write_client_prefix = "29c0325f"
+    fallback_rt = None
+    fallback_cid = None
     for _key, rt_entry in data.get("RefreshToken", {}).items():
         rt = rt_entry.get("secret")
-        if rt:
-            refresh_token = rt
-            client_id = rt_entry.get("client_id") or rt_entry.get("clientId")
-            break
+        cid = rt_entry.get("client_id") or rt_entry.get("clientId")
+        if rt and cid:
+            if cid.startswith(write_client_prefix):
+                refresh_token = rt
+                client_id = cid
+                break
+            elif not fallback_rt:
+                fallback_rt = rt
+                fallback_cid = cid
+
+    if not refresh_token:
+        refresh_token = fallback_rt
+        client_id = fallback_cid
 
     # Try to get tenant from Account or token entry metadata
     for _key, acct in data.get("Account", {}).items():
@@ -202,3 +216,25 @@ def add_chat_member(*, chat_id: str, user_email: str) -> None:
 async def add_chat_member_async(*, chat_id: str, user_email: str) -> None:
     """Async wrapper for add_chat_member."""
     await asyncio.to_thread(add_chat_member, chat_id=chat_id, user_email=user_email)
+
+
+def send_chat_message_sync(*, chat_id: str, html_body: str) -> dict[str, Any]:
+    """Send an HTML message to a Teams chat via Graph API (no teams-cli needed).
+
+    Uses the same token cache and refresh logic as other Graph API calls.
+    Eliminates dependency on teams-cli write mode auth.
+    """
+    result = _graph_post_sync(f"/chats/{chat_id}/messages", {
+        "body": {
+            "contentType": "html",
+            "content": html_body,
+        }
+    })
+    return result
+
+
+async def send_chat_message_async(*, chat_id: str, html_body: str) -> dict[str, Any]:
+    """Async wrapper for send_chat_message_sync."""
+    return await asyncio.to_thread(
+        send_chat_message_sync, chat_id=chat_id, html_body=html_body,
+    )
