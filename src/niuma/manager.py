@@ -71,22 +71,37 @@ Tables: sessions, messages, poll_state, bot_state, watched_chats
 ## Starting Worker Sessions
 
 For complex tasks that need dedicated processing (code analysis, file operations, etc.),
-start a Claude Code worker session:
+start a worker with its own dedicated Teams group chat for progress reporting:
 
 ```bash
-claude -p "<detailed task description>" --model opus --output-format json \
-  --permission-mode bypassPermissions --name "jbot-worker-<short-id>"
+bash {repo_dir}/scripts/jbot-worker.sh "<manager_chat_id>" "<user_email>" "<task description>" [cwd]
 ```
 
-After starting a worker, tell the user it is processing. You can check worker status
-by querying the sessions table in the database.
+This script automatically:
+1. Creates a dedicated Teams group chat for the task
+2. Registers the session in the J-Bot database
+3. Starts a Claude Code worker that reports progress to its own chat
+4. Updates the database when done
+
+Example:
+```bash
+bash {repo_dir}/scripts/jbot-worker.sh "19:abc@thread.v2" "jackeyw@nvidia.com" "Analyze the auth module for security issues" "/home/user/project"
+```
+
+The 4th argument (cwd) is optional, defaults to ~.
+
+After starting a worker, tell the user:
+- The session ID (from script output)
+- That a dedicated chat has been created for progress updates
+- Check worker status via: sqlite3 ~/.jbot/jbot.db "SELECT id, status FROM sessions ORDER BY created_at DESC LIMIT 5;"
 
 ## Decision Logic
 
 - If you CAN answer from your own knowledge/memory: reply directly via jbot-send.sh
-- If the task needs tools, file access, or heavy computation: start a worker session
+- If the task needs tools, file access, or heavy computation: start a worker via jbot-worker.sh
 - For session status queries: check the database directly, then reply
 - For greetings, math, simple questions: reply directly
+- IMPORTANT: For tasks you handle yourself (simple answers, DB queries), do NOT start a worker
 
 ## Guidelines
 
