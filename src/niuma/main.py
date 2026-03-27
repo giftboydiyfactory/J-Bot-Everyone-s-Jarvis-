@@ -91,34 +91,21 @@ class NiumaBot:
             logger.info("Resumed Manager chat from DB: %s", saved_chat[:30])
 
     async def _detect_owner(self) -> None:
-        """Detect the authenticated teams-cli user and store as owner.
+        """Detect the authenticated user via Graph API /me.
 
-        Runs 'teams-cli auth status --json' to get the username (email), then
-        calls the Graph API /me endpoint to get the displayName as a fallback
-        for chats (e.g. 48:notes) that surface displayName instead of email.
-
+        Uses Graph API directly — no teams-cli dependency.
         Failures are non-fatal — the bot falls back to config-only admin lists.
         """
-        import json as _json
-        import subprocess
-
-        # Step 1: Get owner email from teams-cli auth status
+        # Step 1: Get owner email from Graph API /me
         try:
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["teams-cli", "auth", "status", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                auth_data = _json.loads(result.stdout)
-                username = auth_data.get("username", "")
-                if username:
-                    self._owner_email = username
-                    logger.info("Auto-detected owner email from teams-cli: %s", username)
+            from niuma.teams_api import _get_me_sync
+            me = await asyncio.to_thread(_get_me_sync)
+            email = me.get("mail") or me.get("userPrincipalName", "")
+            if email:
+                self._owner_email = email
+                logger.info("Auto-detected owner email from Graph API: %s", email)
         except Exception as exc:
-            logger.warning("Could not detect owner from teams-cli auth status: %s", exc)
+            logger.warning("Could not detect owner email: %s", exc)
 
         # Step 2: Get owner displayName from Graph API /me (for 48:notes chats)
         try:
