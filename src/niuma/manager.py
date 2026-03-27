@@ -3,7 +3,7 @@
 
 The Manager is a persistent Claude Code session that gets --resume'd for every
 user message. It has full tool access and replies DIRECTLY to Teams using
-teams-cli, eliminating the JSON-parsing bottleneck.
+jbot-send.sh (Graph API), eliminating the JSON-parsing bottleneck.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def _build_manager_system_prompt() -> str:
 
     prompt = f"""\
 You are J-Bot — an AI coordinator managing task sessions via Teams chat.
-You have FULL tool access: filesystem, shell, sqlite3, teams-cli, claude CLI.
+You have FULL tool access: filesystem, shell, sqlite3, jbot-send.sh, claude CLI.
 
 ## How to Reply to Users
 
@@ -43,9 +43,9 @@ bash {repo_dir}/scripts/jbot-send.sh "<chat_id>" "<your HTML message>"
 
 This uses Graph API with automatic token refresh — no manual auth needed.
 
-IMPORTANT: ALWAYS use jbot-send.sh for sending messages, NOT "teams-cli chat send".
-The skills reference docs mention teams-cli but that requires separate write auth.
-jbot-send.sh bypasses this by using Graph API directly.
+IMPORTANT: ALWAYS use jbot-send.sh for sending messages.
+NEVER use "teams-cli" — it is NOT installed and will hang/fail.
+jbot-send.sh uses Graph API directly with automatic token refresh.
 
 CRITICAL FORMATTING RULES:
 1. EVERY message MUST start with: <p><b>【🤖J-Bot】</b>
@@ -83,7 +83,7 @@ by querying the sessions table in the database.
 
 ## Decision Logic
 
-- If you CAN answer from your own knowledge/memory: reply directly via teams-cli
+- If you CAN answer from your own knowledge/memory: reply directly via jbot-send.sh
 - If the task needs tools, file access, or heavy computation: start a worker session
 - For session status queries: check the database directly, then reply
 - For greetings, math, simple questions: reply directly
@@ -94,7 +94,7 @@ by querying the sessions table in the database.
 - Keep responses concise and well-formatted
 - For complex requests, break into subtasks and start multiple workers
 - You are the SINGLE point of contact — users talk to you, you coordinate everything
-- ALWAYS reply to the user via teams-cli — do NOT just return text
+- ALWAYS reply to the user via jbot-send.sh — do NOT just return text
 """
 
     if skills_content:
@@ -130,7 +130,7 @@ _BOT_STATE_MANAGER_SESSION = "manager_session_id"
 class Manager:
     """Stateful Manager that persists across interactions via --resume.
 
-    The Manager has full tool access and replies directly to Teams via teams-cli.
+    The Manager has full tool access and replies directly to Teams via jbot-send.sh.
     No JSON parsing needed — the Manager handles everything.
     """
 
@@ -166,7 +166,7 @@ class Manager:
         context: str = "",
         _is_retry: bool = False,
     ) -> None:
-        """Send a message to the Manager — it replies directly via teams-cli.
+        """Send a message to the Manager — it replies directly via jbot-send.sh.
 
         The Manager session is resumed each time, maintaining full conversation history.
         The chat_id is injected so Manager always knows where to reply.
@@ -268,7 +268,7 @@ class Manager:
         """Feed a worker's result back to the Manager for processing.
 
         The Manager can then decide to report to user, assign follow-up, etc.
-        It replies directly via teams-cli to the given chat_id.
+        It replies directly via jbot-send.sh to the given chat_id.
         """
         context = (
             f"[WORKER RESULT] Session [{session_id}] finished with status={status}.\n"

@@ -85,7 +85,7 @@ async def handle_message(
         chat_id, "Received — thinking...", reply_to=message_id,
     )
 
-    # Call Manager — it replies directly via teams-cli
+    # Call Manager — it replies directly via jbot-send.sh (Graph API)
     last_error = None
     for attempt in range(2):
         try:
