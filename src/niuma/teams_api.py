@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 _TOKEN_CACHE = Path.home() / ".ai-pim-utils" / "token-cache-ai-pim-utils"
 
+# In-memory cache for refreshed tokens (avoids re-reading file + re-refreshing every call)
+_cached_token: str = ""
+_cached_token_expiry: int = 0
+
 
 def _get_access_token() -> str:
     """Read a valid access token from the shared ai-pim-utils token cache.
@@ -35,11 +39,19 @@ def _get_access_token() -> str:
     with open(_TOKEN_CACHE) as f:
         data = json.load(f)
 
+    global _cached_token, _cached_token_expiry
     now = int(time.time())
-    # First pass: look for a valid (non-expired) access token
+
+    # Check in-memory cache first (avoids file read + refresh on every call)
+    if _cached_token and _cached_token_expiry > now + 60:
+        return _cached_token
+
+    # Check file cache for a valid access token
     for _key, token_entry in data.get("AccessToken", {}).items():
         if int(token_entry.get("expires_on", 0)) > now:
-            return token_entry["secret"]
+            _cached_token = token_entry["secret"]
+            _cached_token_expiry = int(token_entry.get("expires_on", 0))
+            return _cached_token
 
     # No valid access token found — try to refresh using a refresh token
     logger.warning("Access token expired. Attempting to refresh using refresh token...")
@@ -111,6 +123,9 @@ def _get_access_token() -> str:
         new_access_token = token_response.get("access_token")
         if not new_access_token:
             raise RuntimeError("Token refresh response missing access_token")
+        # Cache in memory (token typically valid for 1 hour)
+        _cached_token = new_access_token
+        _cached_token_expiry = now + 3600
         logger.info("Successfully refreshed access token via refresh token.")
         return new_access_token
     except Exception as exc:
