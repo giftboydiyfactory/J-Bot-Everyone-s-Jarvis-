@@ -27,6 +27,13 @@ def _get_access_token() -> str:
     token from the cache to obtain a new access token via the OAuth token endpoint.
     If refresh fails, logs a clear error directing the user to re-authenticate.
     """
+    global _cached_token, _cached_token_expiry
+    now = int(time.time())
+
+    # Check in-memory cache FIRST (avoids file I/O + refresh on every call)
+    if _cached_token and _cached_token_expiry > now + 60:
+        return _cached_token
+
     if not _TOKEN_CACHE.exists():
         raise RuntimeError("Token cache not found. Run 'teams-cli auth login' first.")
 
@@ -38,13 +45,6 @@ def _get_access_token() -> str:
 
     with open(_TOKEN_CACHE) as f:
         data = json.load(f)
-
-    global _cached_token, _cached_token_expiry
-    now = int(time.time())
-
-    # Check in-memory cache first (avoids file read + refresh on every call)
-    if _cached_token and _cached_token_expiry > now + 60:
-        return _cached_token
 
     # Check file cache for a valid access token
     for _key, token_entry in data.get("AccessToken", {}).items():

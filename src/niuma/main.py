@@ -539,11 +539,12 @@ def _setup_logging(config: NiumaConfig) -> None:
     log_path = Path(config.logging.file)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Only use StreamHandler — the watchdog's `tee` already writes stdout to log file.
+    # Using both FileHandler + StreamHandler + tee causes duplicate log lines.
     logging.basicConfig(
         level=getattr(logging, config.logging.level, logging.INFO),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
-            logging.FileHandler(str(log_path)),
             logging.StreamHandler(),
         ],
     )

@@ -15,6 +15,7 @@ if [ -f "$PIDFILE" ]; then
     rm -f "$PIDFILE"
 fi
 pkill -f "niuma.main" 2>/dev/null || true
+pkill -f "bin/jbot" 2>/dev/null || true
 sleep 1
 
 # 2. Ensure venv

@@ -196,7 +196,16 @@ class Manager:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-        stdout, stderr = await proc.communicate()
+        # Timeout: Manager replies via tools, so it's safe to kill after timeout.
+        # Without this, a long-running Manager blocks the entire polling loop.
+        _MGR_TIMEOUT = 300  # 5 minutes
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_MGR_TIMEOUT)
+        except asyncio.TimeoutError:
+            logger.warning("Manager timed out after %ds — killing process (reply likely already sent)", _MGR_TIMEOUT)
+            proc.kill()
+            await proc.wait()
+            return
 
         if proc.returncode != 0:
             error_msg = stderr.decode().strip()
