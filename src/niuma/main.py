@@ -241,6 +241,17 @@ class NiumaBot:
                         self._poll_interval = min(
                             self._poll_interval + 5, self._poll_max
                         )
+            except ValueError as ve:
+                if "no active connection" in str(ve):
+                    logger.warning("DB connection lost — reconnecting")
+                    try:
+                        await self._db.reconnect()
+                    except Exception:
+                        logger.exception("DB reconnect failed")
+                else:
+                    logger.exception("Error in poll cycle")
+                self._consecutive_failures += 1
+                self._check_alert()
             except Exception:
                 logger.exception("Error in poll cycle")
                 self._consecutive_failures += 1

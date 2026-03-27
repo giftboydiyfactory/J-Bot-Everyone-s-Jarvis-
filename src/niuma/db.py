@@ -100,6 +100,16 @@ class Database:
         await self._conn.commit()
         await self._migrate()
 
+    async def reconnect(self) -> None:
+        """Re-establish DB connection after it was lost."""
+        try:
+            if self._conn:
+                await self._conn.close()
+        except Exception:
+            pass
+        self._conn = await aiosqlite.connect(self._db_path)
+        self._conn.row_factory = aiosqlite.Row
+
     async def _migrate(self) -> None:
         """Apply any additive migrations that are safe to re-run.
 
