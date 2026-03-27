@@ -63,9 +63,8 @@ def _build_worker_safety_prompt(bot_name: str = "jbot", chat_id: str = "") -> st
         f"- J-Bot DB: ~/.jbot/jbot.db (SQLite, tables: sessions, messages, poll_state)\n"
         "- Claude session history: ~/.claude/projects/*/  (JSONL files per session)\n"
         "- J-Bot source: the J-Bot source directory (wherever you cloned the repo)\n"
-        "- teams-cli: can read Teams messages\n"
-        "- jbot-send.sh: send Teams messages via Graph API (PREFERRED over teams-cli send)\n"
-        "  NOTE: Always use jbot-send.sh instead of teams-cli chat send\n"
+        "- jbot-send.sh: send Teams messages via Graph API\n"
+        "  NOTE: NEVER use teams-cli — it is NOT available. Always use jbot-send.sh.\n"
         "When asked to manage sessions, scan history, create groups, import sessions, etc. "
         "you can directly access these resources.\n\n"
     )

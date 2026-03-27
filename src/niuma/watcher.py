@@ -198,7 +198,7 @@ async def watch_session(
                 )
 
             # Feed result back to Manager so it remembers and can report to user
-            # Manager replies directly via teams-cli, no parsing needed
+            # Manager replies directly via jbot-send.sh, no parsing needed
             await bot._manager.feed_worker_result(
                 session_id=session_id,
                 result=result_text or error_text or "",
