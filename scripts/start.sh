@@ -34,7 +34,7 @@ bash "$REPO_DIR/scripts/migrate.sh" 2>/dev/null || true
 
 mkdir -p "$HOME/.jbot"
 
-# 3. Pre-flight auth check (Graph API only — no teams-cli needed)
+# 3. Pre-flight auth check — verify token, auto-login if needed
 echo "  [3/4] Checking auth..."
 
 AUTH_CHECK=$(PYTHONPATH="$REPO_DIR/src" python3 -c "
@@ -48,21 +48,44 @@ except Exception as e:
 
 if echo "$AUTH_CHECK" | grep -q "FAIL"; then
     echo ""
-    echo "  ⚠️  Graph API token not available."
-    echo "  Run this once to create the token cache:"
-    echo "    teams-cli auth login"
+    echo "  ⚠️  Graph API token not available or expired."
+    echo "  Starting teams-cli auth login (with write permissions)..."
+    echo "  Please complete the device code login in your browser."
     echo ""
-    echo "  After login, run start.sh again."
-    exit 1
+
+    # Run teams-cli auth login interactively — waits for user to complete browser login
+    if teams-cli auth login; then
+        echo ""
+        echo "  ✅ Login successful! Verifying token..."
+        # Re-check after login
+        AUTH_RECHECK=$(PYTHONPATH="$REPO_DIR/src" python3 -c "
+from niuma.teams_api import _get_access_token
+try:
+    token = _get_access_token()
+    print('OK' if token else 'FAIL')
+except Exception as e:
+    print(f'FAIL: {e}')
+" 2>&1)
+        if echo "$AUTH_RECHECK" | grep -q "FAIL"; then
+            echo "  ❌ Token still not valid after login. Check token cache."
+            echo "     Cache: ~/.ai-pim-utils/token-cache-ai-pim-utils"
+            exit 1
+        fi
+    else
+        echo ""
+        echo "  ❌ Login failed or was cancelled."
+        echo "  You can also try: outlook-cli auth login"
+        exit 1
+    fi
 fi
+
+echo "  ✅ Auth OK (token valid, Graph API ready)"
 
 # Check claude CLI
 if ! which claude >/dev/null 2>&1; then
     echo "  ⚠️  claude CLI not found. Please install it first."
     exit 1
 fi
-
-echo "  ✅ Auth OK (Graph API — no teams-cli needed for polling/sending)"
 
 # 4. Start watchdog loop (nohup + background = survives SSH disconnect)
 echo "  [4/4] Starting watchdog..."
