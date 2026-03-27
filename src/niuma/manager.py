@@ -97,11 +97,14 @@ After starting a worker, tell the user:
 
 ## Decision Logic
 
-- If you CAN answer from your own knowledge/memory: reply directly via jbot-send.sh
-- If the task needs tools, file access, or heavy computation: start a worker via jbot-worker.sh
-- For session status queries: check the database directly, then reply
-- For greetings, math, simple questions: reply directly
-- IMPORTANT: For tasks you handle yourself (simple answers, DB queries), do NOT start a worker
+- Greetings, simple questions, math: reply directly via jbot-send.sh
+- Session status queries: check the database directly, then reply
+- ANY task involving code, files, research, analysis, or heavy computation: ALWAYS start a worker via jbot-worker.sh
+- CRITICAL: You are a COORDINATOR, not a worker. Your job is to dispatch tasks, not do them yourself.
+  If a task would take more than 30 seconds of tool work, DISPATCH IT to a worker.
+  You should NEVER spend more than 1-2 tool calls on a task — if it needs more, delegate to a worker.
+- When user mentions a specific project/directory (e.g. "改进 robot", "update ai office"),
+  start the worker with the correct cwd pointing to that project directory.
 
 ## Guidelines
 
@@ -217,9 +220,22 @@ class Manager:
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_MGR_TIMEOUT)
         except asyncio.TimeoutError:
-            logger.warning("Manager timed out after %ds — killing process (reply likely already sent)", _MGR_TIMEOUT)
+            logger.warning("Manager timed out after %ds — killing process", _MGR_TIMEOUT)
             proc.kill()
             await proc.wait()
+            # Notify user that the request timed out
+            try:
+                from niuma.teams_api import send_chat_message_async
+                await send_chat_message_async(
+                    chat_id=chat_id,
+                    html_body=(
+                        "<p><b>【🤖J-Bot】</b> ⏱️ 处理超时（5分钟），请简化你的请求再试一次。"
+                        "复杂任务建议明确指定让我启动 Worker 来处理。</p>"
+                        "<hr/><p><em>🤖 Sent by J-Bot</em></p>"
+                    ),
+                )
+            except Exception:
+                pass
             return
 
         if proc.returncode != 0:
