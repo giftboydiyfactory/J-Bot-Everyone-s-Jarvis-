@@ -91,12 +91,11 @@ class NiumaBot:
             logger.info("Resumed Manager chat from DB: %s", saved_chat[:30])
 
     async def _detect_owner(self) -> None:
-        """Detect the authenticated user via Graph API /me.
+        """Detect the authenticated user via Graph API /me (single call).
 
         Uses Graph API directly — no teams-cli dependency.
         Failures are non-fatal — the bot falls back to config-only admin lists.
         """
-        # Step 1: Get owner email from Graph API /me
         try:
             from niuma.teams_api import _get_me_sync
             me = await asyncio.to_thread(_get_me_sync)
@@ -104,19 +103,12 @@ class NiumaBot:
             if email:
                 self._owner_email = email
                 logger.info("Auto-detected owner email from Graph API: %s", email)
-        except Exception as exc:
-            logger.warning("Could not detect owner email: %s", exc)
-
-        # Step 2: Get owner displayName from Graph API /me (for 48:notes chats)
-        try:
-            from niuma.teams_api import _get_me_sync
-            me = await asyncio.to_thread(_get_me_sync)
             display_name = me.get("displayName", "")
             if display_name:
                 self._owner_display_name = display_name
                 logger.info("Auto-detected owner displayName from Graph API: %s", display_name)
         except Exception as exc:
-            logger.warning("Could not detect owner displayName from Graph API: %s", exc)
+            logger.warning("Could not detect owner from Graph API: %s", exc)
 
     async def _ensure_manager_chat(self) -> str:
         """Create or retrieve the Manager's dedicated chat group.
@@ -239,12 +231,8 @@ class NiumaBot:
                 now = _time.time()
                 if now - self._last_token_refresh > self._token_refresh_interval:
                     try:
-                        from niuma.teams_api import _get_access_token
-                        import niuma.teams_api as _api
-                        # Force refresh by clearing in-memory cache
-                        _api._cached_token = ""
-                        _api._cached_token_expiry = 0
-                        await asyncio.to_thread(_get_access_token)
+                        from niuma.teams_api import force_refresh
+                        await asyncio.to_thread(force_refresh)
                         self._last_token_refresh = now
                         logger.debug("Proactive token refresh OK")
                     except Exception:
