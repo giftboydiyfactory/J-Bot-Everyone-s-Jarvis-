@@ -228,8 +228,28 @@ class NiumaBot:
         except Exception:
             logger.warning("Session cleanup failed", exc_info=True)
 
+        # Proactive token refresh: refresh every 45 minutes (tokens last ~60 min)
+        self._token_refresh_interval = 45 * 60  # seconds
+        self._last_token_refresh = 0
+
         while self._running:
             try:
+                # Proactive token refresh before expiry
+                import time as _time
+                now = _time.time()
+                if now - self._last_token_refresh > self._token_refresh_interval:
+                    try:
+                        from niuma.teams_api import _get_access_token
+                        import niuma.teams_api as _api
+                        # Force refresh by clearing in-memory cache
+                        _api._cached_token = ""
+                        _api._cached_token_expiry = 0
+                        await asyncio.to_thread(_get_access_token)
+                        self._last_token_refresh = now
+                        logger.debug("Proactive token refresh OK")
+                    except Exception:
+                        logger.warning("Proactive token refresh failed — will retry next cycle")
+
                 had_activity = await self.poll_once()
                 if had_activity:
                     self._poll_interval = 5
