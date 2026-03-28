@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 import urllib.request
 import urllib.error
 import time
@@ -15,9 +16,19 @@ logger = logging.getLogger(__name__)
 
 _TOKEN_CACHE = Path.home() / ".ai-pim-utils" / "token-cache-ai-pim-utils"
 
-# In-memory cache for refreshed tokens (avoids re-reading file + re-refreshing every call)
+# Thread-safe in-memory cache for refreshed tokens
+_token_lock = threading.Lock()
 _cached_token: str = ""
 _cached_token_expiry: int = 0
+
+
+def force_refresh() -> str:
+    """Force-refresh the token (thread-safe). Used by proactive refresh."""
+    with _token_lock:
+        global _cached_token, _cached_token_expiry
+        _cached_token = ""
+        _cached_token_expiry = 0
+        return _get_access_token()
 
 
 def _get_access_token() -> str:
@@ -26,22 +37,25 @@ def _get_access_token() -> str:
     If no valid (non-expired) access token is found, attempts to use a refresh
     token from the cache to obtain a new access token via the OAuth token endpoint.
     If refresh fails, logs a clear error directing the user to re-authenticate.
+
+    Thread-safe: uses _token_lock for cache reads/writes.
     """
     global _cached_token, _cached_token_expiry
     now = int(time.time())
 
-    # Check in-memory cache FIRST (avoids file I/O + refresh on every call)
-    if _cached_token and _cached_token_expiry > now + 60:
-        return _cached_token
+    with _token_lock:
+        if _cached_token and _cached_token_expiry > now + 60:
+            return _cached_token
 
     if not _TOKEN_CACHE.exists():
         raise RuntimeError("Token cache not found. Run 'teams-cli auth login' first.")
 
-    # Check permissions
+    # Auto-fix permissive permissions on token cache
     import stat as _stat
     _mode = _TOKEN_CACHE.stat().st_mode
     if _mode & (_stat.S_IRGRP | _stat.S_IROTH):
-        logger.warning("Token cache %s has permissive permissions. Run: chmod 600 %s", _TOKEN_CACHE, _TOKEN_CACHE)
+        logger.warning("Fixing permissive permissions on token cache %s", _TOKEN_CACHE)
+        _TOKEN_CACHE.chmod(0o600)
 
     with open(_TOKEN_CACHE) as f:
         data = json.load(f)
@@ -49,8 +63,9 @@ def _get_access_token() -> str:
     # Check file cache for a valid access token
     for _key, token_entry in data.get("AccessToken", {}).items():
         if int(token_entry.get("expires_on", 0)) > now:
-            _cached_token = token_entry["secret"]
-            _cached_token_expiry = int(token_entry.get("expires_on", 0))
+            with _token_lock:
+                _cached_token = token_entry["secret"]
+                _cached_token_expiry = int(token_entry.get("expires_on", 0))
             return _cached_token
 
     # No valid access token found — try to refresh using a refresh token
@@ -59,16 +74,15 @@ def _get_access_token() -> str:
     client_id = None
     tenant_id = None
 
-    # Prefer the write-capable client (has Chat.ReadWrite scope)
-    # Try all refresh tokens, preferring client_id 29c0325f (write-capable)
-    write_client_prefix = "29c0325f"
+    # Prefer write-capable OAuth client (Microsoft "Office Desktop" — has Chat.ReadWrite scope)
+    _WRITE_CAPABLE_CLIENT_PREFIX = "29c0325f"
     fallback_rt = None
     fallback_cid = None
     for _key, rt_entry in data.get("RefreshToken", {}).items():
         rt = rt_entry.get("secret")
         cid = rt_entry.get("client_id") or rt_entry.get("clientId")
         if rt and cid:
-            if cid.startswith(write_client_prefix):
+            if cid.startswith(_WRITE_CAPABLE_CLIENT_PREFIX):
                 refresh_token = rt
                 client_id = cid
                 break
@@ -124,8 +138,9 @@ def _get_access_token() -> str:
         if not new_access_token:
             raise RuntimeError("Token refresh response missing access_token")
         # Cache in memory (token typically valid for 1 hour)
-        _cached_token = new_access_token
-        _cached_token_expiry = now + 3600
+        with _token_lock:
+            _cached_token = new_access_token
+            _cached_token_expiry = now + 3600
         logger.info("Successfully refreshed access token via refresh token.")
         return new_access_token
     except Exception as exc:
@@ -149,7 +164,7 @@ def _graph_post_sync(endpoint: str, body: dict[str, Any]) -> dict[str, Any]:
     req.add_header("Content-Type", "application/json")
 
     try:
-        resp = urllib.request.urlopen(req)
+        resp = urllib.request.urlopen(req, timeout=15)
         return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         error_body = e.read().decode()[:500]
@@ -162,7 +177,12 @@ def _get_me_sync() -> dict[str, Any]:
     token = _get_access_token()
     req = urllib.request.Request("https://graph.microsoft.com/v1.0/me")
     req.add_header("Authorization", f"Bearer {token}")
-    return json.loads(urllib.request.urlopen(req).read())
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()[:300]
+        raise RuntimeError(f"Graph /me failed ({e.code}): {error_body}")
 
 
 def create_session_chat(

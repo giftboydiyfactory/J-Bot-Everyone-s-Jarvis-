@@ -56,13 +56,16 @@ conn.execute(
 conn.commit()
 conn.close()
 
-# Send welcome message to the dedicated chat
+# Send welcome message to the dedicated chat (HTML-escape user input)
+import html as _html
+safe_desc = _html.escape(task_desc[:200])
+safe_cwd = _html.escape(work_dir)
 send_chat_message_sync(
     chat_id=session_chat_id,
     html_body=(
         f'<p><b>J-Bot</b> Worker session <code>{sid}</code> started</p>'
-        f'<p><b>Task:</b> {task_desc[:200]}</p>'
-        f'<p><b>CWD:</b> <code>{work_dir}</code></p>'
+        f'<p><b>Task:</b> {safe_desc}</p>'
+        f'<p><b>CWD:</b> <code>{safe_cwd}</code></p>'
         f'<p>Progress updates will appear here.</p>'
         '<hr/><p><em>Sent by J-Bot</em></p>'
     ),

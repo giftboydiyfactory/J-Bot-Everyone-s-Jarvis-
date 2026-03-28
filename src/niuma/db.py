@@ -310,9 +310,10 @@ class Database:
 
     async def get_session_by_claude_id(self, claude_session: str) -> Optional[dict[str, Any]]:
         """Find a session by its claude session UUID (or prefix)."""
+        escaped = claude_session.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         cursor = await self._conn.execute(
-            "SELECT * FROM sessions WHERE claude_session LIKE ?",
-            (claude_session + "%",),
+            "SELECT * FROM sessions WHERE claude_session LIKE ? ESCAPE '\\'",
+            (escaped + "%",),
         )
         row = await cursor.fetchone()
         return dict(row) if row else None

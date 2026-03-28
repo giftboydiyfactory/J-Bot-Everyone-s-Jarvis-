@@ -99,15 +99,18 @@ except:
 
 echo "[$(date '+%H:%M:%S')] Result: ${WORKER_RESULT:0:200}"
 
+# HTML-escape the result before embedding (prevents XSS from claude output)
+SAFE_RESULT=$(python3 -c "import html,sys; print(html.escape(sys.stdin.read()[:500]))" <<< "$WORKER_RESULT" 2>/dev/null || echo "$WORKER_RESULT")
+
 # Update DB
 update_db "completed" "$WORKER_RESULT"
 
 # Send completion to dedicated session chat
-report "✅ Task completed.<br/>${WORKER_RESULT:0:500}"
+report "✅ Task completed.<br/>$SAFE_RESULT"
 
 # Send completion to manager chat
 $SEND "$MANAGER_CHAT_ID" \
-    "<p><b>J-Bot</b> ✅ Worker <code>$SESSION_ID</code> finished.</p><p>${WORKER_RESULT:0:300}</p><hr/><p><em>Sent by J-Bot</em></p>" \
+    "<p><b>J-Bot</b> ✅ Worker <code>$SESSION_ID</code> finished.</p><p>$SAFE_RESULT</p><hr/><p><em>Sent by J-Bot</em></p>" \
     2>/dev/null || true
 
 echo "[$(date '+%H:%M:%S')] Worker $SESSION_ID done."
