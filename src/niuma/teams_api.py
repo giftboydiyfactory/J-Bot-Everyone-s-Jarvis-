@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 _TOKEN_CACHE = Path.home() / ".ai-pim-utils" / "token-cache-ai-pim-utils"
 
-# Thread-safe in-memory cache for refreshed tokens
-_token_lock = threading.Lock()
+# Thread-safe in-memory cache for refreshed tokens (RLock = reentrant, avoids deadlock)
+_token_lock = threading.RLock()
 _cached_token: str = ""
 _cached_token_expiry: int = 0
 

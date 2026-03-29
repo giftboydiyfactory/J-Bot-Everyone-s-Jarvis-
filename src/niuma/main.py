@@ -224,19 +224,19 @@ class NiumaBot:
         self._token_refresh_interval = 45 * 60  # seconds
         self._last_token_refresh = 0
 
+        import time as _time
         while self._running:
             try:
                 # Proactive token refresh before expiry
-                import time as _time
                 now = _time.time()
                 if now - self._last_token_refresh > self._token_refresh_interval:
                     try:
                         from niuma.teams_api import force_refresh
                         await asyncio.to_thread(force_refresh)
                         self._last_token_refresh = now
-                        logger.debug("Proactive token refresh OK")
                     except Exception:
                         logger.warning("Proactive token refresh failed — will retry next cycle")
+                        self._last_token_refresh = now  # Don't retry immediately on failure
 
                 had_activity = await self.poll_once()
                 if had_activity:
@@ -321,6 +321,7 @@ class NiumaBot:
     async def poll_once(self) -> bool:
         """Single poll cycle. Returns True if any user message was processed."""
         self._had_activity = False
+        logger.debug("Poll cycle start")
         await self._check_config_reload()
         # Merge config chat_ids with dynamically watched chats from DB
         watched = await self._db.list_watched_chats()
