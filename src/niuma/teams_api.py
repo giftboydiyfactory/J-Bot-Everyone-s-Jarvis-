@@ -74,11 +74,12 @@ def _get_access_token() -> str:
             elif not fallback_token:
                 fallback_token = token_entry
 
-    best = write_token or fallback_token
-    if best:
+    # Only use write-capable token. Read-only tokens cause 403 on send.
+    # If no write token in cache, fall through to refresh the write client.
+    if write_token:
         with _token_lock:
-            _cached_token = best["secret"]
-            _cached_token_expiry = int(best.get("expires_on", 0))
+            _cached_token = write_token["secret"]
+            _cached_token_expiry = int(write_token.get("expires_on", 0))
         return _cached_token
 
     # No valid access token found — try to refresh using a refresh token
