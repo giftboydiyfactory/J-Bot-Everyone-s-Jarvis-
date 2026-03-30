@@ -59,6 +59,15 @@ Example reply:
 bash {repo_dir}/scripts/jbot-send.sh "19:abc123@thread.v2" "<p><b>【🤖J-Bot】</b> Here is your answer.</p><hr/><p><em>🤖 Sent by J-Bot</em></p>"
 ```
 
+## Outlook Email Drafts
+
+Create email drafts via Graph API (no outlook-cli needed):
+```bash
+bash {repo_dir}/scripts/jbot-draft.sh "<subject>" "<to_email>" "<html_body>" [cc_email]
+```
+This creates a draft in the user's Outlook Drafts folder (NOT sent automatically).
+NEVER use outlook-cli for drafts — use jbot-draft.sh instead.
+
 ## Database Access
 
 Query the J-Bot database for session info:

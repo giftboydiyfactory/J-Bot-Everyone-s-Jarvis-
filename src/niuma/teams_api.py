@@ -287,3 +287,46 @@ async def send_chat_message_async(*, chat_id: str, html_body: str) -> dict[str, 
     return await asyncio.to_thread(
         send_chat_message_sync, chat_id=chat_id, html_body=html_body,
     )
+
+
+def create_draft_sync(
+    *,
+    subject: str,
+    to: list[str],
+    html_body: str,
+    cc: Optional[list[str]] = None,
+    importance: str = "normal",
+) -> dict[str, Any]:
+    """Create an Outlook draft email via Graph API (no outlook-cli needed).
+
+    Uses the write-capable token (29c0325f) which has Mail.ReadWrite scope.
+    The draft appears in the user's Drafts folder for review and manual send.
+    """
+    recipients = [{"emailAddress": {"address": addr}} for addr in to]
+    body: dict[str, Any] = {
+        "subject": subject,
+        "body": {"contentType": "html", "content": html_body},
+        "toRecipients": recipients,
+        "importance": importance,
+    }
+    if cc:
+        body["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]
+
+    result = _graph_post_sync("/me/messages", body)
+    logger.info("Draft created: %s (id: %s)", subject, result.get("id", "?")[:20])
+    return result
+
+
+async def create_draft_async(
+    *,
+    subject: str,
+    to: list[str],
+    html_body: str,
+    cc: Optional[list[str]] = None,
+    importance: str = "normal",
+) -> dict[str, Any]:
+    """Async wrapper for create_draft_sync."""
+    return await asyncio.to_thread(
+        create_draft_sync,
+        subject=subject, to=to, html_body=html_body, cc=cc, importance=importance,
+    )
