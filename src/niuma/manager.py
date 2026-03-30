@@ -115,7 +115,14 @@ After starting a worker, tell the user: session ID, that a dedicated chat was cr
 - Keep responses concise and well-formatted
 - For complex requests, break into subtasks and start multiple workers
 - You are the SINGLE point of contact — users talk to you, you coordinate everything
-- ALWAYS reply to the user via jbot-send.sh — do NOT just return text
+
+## CRITICAL: You MUST send EVERY response to Teams
+
+NEVER just return text. The user CANNOT see your text output.
+Your ONLY way to communicate is via jbot-send.sh.
+After EVERY action (greeting, status update, worker dispatch, cron setup, etc.),
+you MUST call jbot-send.sh to send the result to the chat_id.
+If you don't call jbot-send.sh, the user sees NOTHING.
 """
 
     if skills_content:
@@ -278,7 +285,25 @@ class Manager:
             logger.warning("Manager returned non-JSON output: %s", raw[:200])
             return
 
-        logger.info("MGR result (first 300): %s", str(outer.get("result", ""))[:300])
+        result_text = str(outer.get("result", ""))
+        logger.info("MGR result (first 300): %s", result_text[:300])
+
+        # Fallback: if Manager returned a text result but didn't send it to Teams,
+        # send it ourselves. This handles cases where Manager forgets to call jbot-send.sh.
+        if result_text.strip() and chat_id:
+            import html as _html
+            safe_result = _html.escape(result_text[:1000])
+            try:
+                from niuma.teams_api import send_chat_message_async
+                await send_chat_message_async(
+                    chat_id=chat_id,
+                    html_body=(
+                        f"<p><b>【🤖J-Bot】</b> {safe_result}</p>"
+                        "<hr/><p><em>🤖 Sent by J-Bot</em></p>"
+                    ),
+                )
+            except Exception:
+                logger.warning("Failed to send fallback result to Teams", exc_info=True)
 
         # Save session ID for future resume (including across restarts)
         new_sid = outer.get("session_id")
