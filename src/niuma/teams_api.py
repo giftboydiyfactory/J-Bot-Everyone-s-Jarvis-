@@ -330,3 +330,75 @@ async def create_draft_async(
         create_draft_sync,
         subject=subject, to=to, html_body=html_body, cc=cc, importance=importance,
     )
+
+
+def send_email_sync(
+    *,
+    subject: str,
+    to: list[str],
+    html_body: str,
+    cc: Optional[list[str]] = None,
+    importance: str = "normal",
+) -> None:
+    """Send an email directly via Graph API (no outlook-cli needed).
+
+    Requires Mail.Send scope. Email is sent immediately, NOT saved as draft.
+    """
+    recipients = [{"emailAddress": {"address": addr}} for addr in to]
+    message: dict[str, Any] = {
+        "subject": subject,
+        "body": {"contentType": "html", "content": html_body},
+        "toRecipients": recipients,
+        "importance": importance,
+    }
+    if cc:
+        message["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]
+
+    # /me/sendMail sends immediately (returns 202, no body)
+    token = _get_access_token()
+    url = "https://graph.microsoft.com/v1.0/me/sendMail"
+    data = json.dumps({"message": message}).encode()
+    req = urllib.request.Request(url, data=data, method="POST")
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("Content-Type", "application/json")
+    try:
+        urllib.request.urlopen(req, timeout=15)
+        logger.info("Email sent: %s → %s", subject, ", ".join(to))
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()[:500]
+        raise RuntimeError(f"sendMail failed ({e.code}): {error_body}")
+
+
+def create_calendar_event_sync(
+    *,
+    subject: str,
+    start: str,
+    end: str,
+    attendees: Optional[list[str]] = None,
+    body_html: str = "",
+    location: str = "",
+    is_online: bool = True,
+) -> dict[str, Any]:
+    """Create a calendar event via Graph API (no calendar-cli needed).
+
+    Requires Calendars.ReadWrite scope.
+    start/end format: ISO 8601, e.g. "2026-03-30T10:00:00"
+    """
+    event: dict[str, Any] = {
+        "subject": subject,
+        "start": {"dateTime": start, "timeZone": "Asia/Shanghai"},
+        "end": {"dateTime": end, "timeZone": "Asia/Shanghai"},
+        "body": {"contentType": "html", "content": body_html},
+        "isOnlineMeeting": is_online,
+    }
+    if location:
+        event["location"] = {"displayName": location}
+    if attendees:
+        event["attendees"] = [
+            {"emailAddress": {"address": addr}, "type": "required"}
+            for addr in attendees
+        ]
+
+    result = _graph_post_sync("/me/events", event)
+    logger.info("Calendar event created: %s (id: %s)", subject, result.get("id", "?")[:20])
+    return result

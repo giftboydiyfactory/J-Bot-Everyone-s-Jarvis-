@@ -62,11 +62,13 @@ def _build_worker_safety_prompt(bot_name: str = "jbot", chat_id: str = "") -> st
         f"J-BOT CONTEXT: You have access to the J-Bot infrastructure:\n"
         f"- J-Bot DB: ~/.jbot/jbot.db (SQLite, tables: sessions, messages, poll_state)\n"
         "- Claude session history: ~/.claude/projects/*/  (JSONL files per session)\n"
-        "- J-Bot source: the J-Bot source directory (wherever you cloned the repo)\n"
-        "- jbot-send.sh: send Teams messages via Graph API\n"
-        "  NOTE: NEVER use teams-cli — it is NOT available. Always use jbot-send.sh.\n"
-        "When asked to manage sessions, scan history, create groups, import sessions, etc. "
-        "you can directly access these resources.\n\n"
+        "- J-Bot source: the J-Bot source directory (wherever you cloned the repo)\n\n"
+        f"Microsoft 365 Tools (all via Graph API — no CLI auth needed):\n"
+        f"- bash {repo_dir}/scripts/jbot-send.sh <chat_id> <html>  — Send Teams message\n"
+        f"- bash {repo_dir}/scripts/jbot-draft.sh <subject> <to> <html> [cc]  — Create Outlook draft\n"
+        f"- bash {repo_dir}/scripts/jbot-email.sh <subject> <to> <html> [cc]  — Send email\n"
+        f"- bash {repo_dir}/scripts/jbot-calendar.sh <subject> <start> <end> [attendee] [body]  — Create calendar event\n"
+        "NEVER use outlook-cli, calendar-cli, or teams-cli for write operations.\n\n"
     )
 
     if chat_id:

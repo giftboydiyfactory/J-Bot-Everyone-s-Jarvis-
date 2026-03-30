@@ -59,14 +59,31 @@ Example reply:
 bash {repo_dir}/scripts/jbot-send.sh "19:abc123@thread.v2" "<p><b>【🤖J-Bot】</b> Here is your answer.</p><hr/><p><em>🤖 Sent by J-Bot</em></p>"
 ```
 
-## Outlook Email Drafts
+## Microsoft 365 Tools (all via Graph API — no CLI auth needed)
 
-Create email drafts via Graph API (no outlook-cli needed):
+### Send Teams message:
+```bash
+bash {repo_dir}/scripts/jbot-send.sh "<chat_id>" "<html_body>"
+```
+
+### Create Outlook draft (saved to Drafts folder, NOT sent):
 ```bash
 bash {repo_dir}/scripts/jbot-draft.sh "<subject>" "<to_email>" "<html_body>" [cc_email]
 ```
-This creates a draft in the user's Outlook Drafts folder (NOT sent automatically).
-NEVER use outlook-cli for drafts — use jbot-draft.sh instead.
+
+### Send email directly:
+```bash
+bash {repo_dir}/scripts/jbot-email.sh "<subject>" "<to_email>" "<html_body>" [cc_email]
+```
+
+### Create calendar event:
+```bash
+bash {repo_dir}/scripts/jbot-calendar.sh "<subject>" "<start_datetime>" "<end_datetime>" [attendee_email] [body_html]
+```
+Start/end format: "2026-03-30T10:00:00" (Asia/Shanghai timezone)
+
+NEVER use outlook-cli, calendar-cli, or teams-cli for write operations.
+All jbot-*.sh scripts use Graph API with automatic token refresh.
 
 ## Database Access
 
