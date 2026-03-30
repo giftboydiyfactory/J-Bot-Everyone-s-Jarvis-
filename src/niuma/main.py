@@ -222,7 +222,8 @@ class NiumaBot:
         import time as _time
         while self._running:
             try:
-                had_activity = await self.poll_once()
+                # Hard timeout on poll cycle to prevent network hangs from freezing the loop
+                had_activity = await asyncio.wait_for(self.poll_once(), timeout=60)
                 if had_activity:
                     self._poll_interval = 5
                     self._idle_cycles = 0
@@ -233,6 +234,9 @@ class NiumaBot:
                         self._poll_interval = min(
                             self._poll_interval + 5, self._poll_max
                         )
+            except asyncio.TimeoutError:
+                logger.warning("Poll cycle timed out (60s) — network may be slow, retrying")
+                self._consecutive_failures += 1
             except ValueError as ve:
                 if "no active connection" in str(ve):
                     logger.warning("DB connection lost — reconnecting")
