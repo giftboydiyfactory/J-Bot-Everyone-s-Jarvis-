@@ -1,11 +1,11 @@
 ---
 name: authenticating-entra-device-code
-description: "This skill should be used when the user encounters authentication errors from outlook-cli, teams-cli, calendar-cli, transcript-cli, dl-cli, onedrive-cli, or onenote-cli. Also use when commands hang with no output, when the user says 'log in', 'authenticate', 'token expired', 'auth error', or when any Entra-authenticated CLI returns exit code 2. Covers Microsoft Entra ID device code flow shared across all ai-pim-utils CLIs."
+description: Authenticate with Microsoft Entra ID via device code flow. Shared by outlook-cli, calendar-cli, transcript-cli, dl-cli, onedrive-cli, onenote-cli, and teams-cli. Use when authentication fails, tokens expire, or any Entra-authenticated CLI command hangs or returns auth errors.
 ---
 
 # Entra Device Code Authentication
 
-All Microsoft Graph and Entra-authenticated CLIs share the same device code auth flow and token cache (`~/.ai-pim-utils/token-cache-ai-pim-utils`). Authenticating once covers all of them.
+All Microsoft Graph and Entra-authenticated CLIs share the same device code auth flow and token cache (`~/.ai-pim-utils/auth-cache`). Authenticating once covers all of them.
 
 ## Prerequisites
 
@@ -81,7 +81,7 @@ If a command fails with an auth error after previously working:
 ### Cache corruption
 If auth commands themselves error out:
 ```bash
-rm ~/.ai-pim-utils/token-cache-ai-pim-utils
+rm ~/.ai-pim-utils/auth-cache
 outlook-cli auth login
 ```
 
@@ -90,5 +90,3 @@ outlook-cli auth login
 **Command hangs with no output:** The CLI is likely waiting for device code authentication. Run `auth status --json` in another invocation to check, then cancel the hung command and follow the authentication workflow above.
 
 **"authenticated: true" but commands still fail:** The cached token may have expired silently. Run `auth login` to refresh credentials.
-
-**Exit code 2:** All ai-pim-utils CLIs return exit code 2 for authentication failures. If you see exit code 2, follow the authentication workflow above.
