@@ -49,12 +49,12 @@ except Exception as e:
 if echo "$AUTH_CHECK" | grep -q "FAIL"; then
     echo ""
     echo "  ⚠️  Graph API token not available or expired."
-    echo "  Starting teams-cli auth login (with write permissions)..."
+    echo "  Starting READ_WRITE_MODE=1 teams-cli auth login..."
     echo "  Please complete the device code login in your browser."
     echo ""
 
-    # Run teams-cli auth login interactively — waits for user to complete browser login
-    if teams-cli auth login; then
+    # Run with READ_WRITE_MODE=1 to get Chat.ReadWrite scope (required for sending messages)
+    if READ_WRITE_MODE=1 teams-cli auth login; then
         echo ""
         echo "  ✅ Login successful! Verifying token..."
         # Re-check after login
@@ -74,7 +74,7 @@ except Exception as e:
     else
         echo ""
         echo "  ❌ Login failed or was cancelled."
-        echo "  You can also try: outlook-cli auth login"
+        echo "  Try manually: READ_WRITE_MODE=1 teams-cli auth login"
         exit 1
     fi
 fi

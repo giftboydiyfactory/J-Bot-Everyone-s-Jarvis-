@@ -48,7 +48,7 @@ def _get_access_token() -> str:
             return _cached_token
 
     if not _TOKEN_CACHE.exists():
-        raise RuntimeError("Token cache not found. Run 'teams-cli auth login' first.")
+        raise RuntimeError("Token cache not found. Run 'READ_WRITE_MODE=1 teams-cli auth login' first.")
 
     # Auto-fix permissive permissions on token cache
     import stat as _stat
@@ -103,21 +103,21 @@ def _get_access_token() -> str:
 
     if not refresh_token:
         logger.error(
-            "No refresh token found in cache. Run 'teams-cli auth login' to re-authenticate."
+            "No refresh token found in cache. Run 'READ_WRITE_MODE=1 teams-cli auth login' to re-authenticate."
         )
         raise RuntimeError(
             "Access token expired and no refresh token available. "
-            "Run 'teams-cli auth login' to re-authenticate."
+            "Run 'READ_WRITE_MODE=1 teams-cli auth login' to re-authenticate."
         )
 
     if not client_id or not tenant_id:
         logger.error(
             "Cannot refresh token: missing client_id or tenant_id in cache. "
-            "Run 'teams-cli auth login' to re-authenticate."
+            "Run 'READ_WRITE_MODE=1 teams-cli auth login' to re-authenticate."
         )
         raise RuntimeError(
             "Access token expired. Could not find client_id/tenant_id for refresh. "
-            "Run 'teams-cli auth login' to re-authenticate."
+            "Run 'READ_WRITE_MODE=1 teams-cli auth login' to re-authenticate."
         )
 
     try:
@@ -145,11 +145,11 @@ def _get_access_token() -> str:
         return new_access_token
     except Exception as exc:
         logger.error(
-            "Token refresh failed: %s. Run 'teams-cli auth login' to re-authenticate.", exc
+            "Token refresh failed: %s. Run 'READ_WRITE_MODE=1 teams-cli auth login' to re-authenticate.", exc
         )
         raise RuntimeError(
             f"Access token expired and refresh failed: {exc}. "
-            "Run 'teams-cli auth login' to re-authenticate."
+            "Run 'READ_WRITE_MODE=1 teams-cli auth login' to re-authenticate."
         ) from exc
 
 

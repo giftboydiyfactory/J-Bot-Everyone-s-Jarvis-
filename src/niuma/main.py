@@ -291,8 +291,8 @@ class NiumaBot:
             if token:
                 logger.info("Token refreshed successfully via refresh token")
         except Exception as exc:
-            logger.error("Token refresh failed: %s. Manual login needed: teams-cli auth login", exc)
-            _send_alert("Auth expired", "Run: teams-cli auth login")
+            logger.error("Token refresh failed: %s. Manual login needed: READ_WRITE_MODE=1 teams-cli auth login", exc)
+            _send_alert("Auth expired", "Run: READ_WRITE_MODE=1 teams-cli auth login")
 
     def _check_alert(self) -> None:
         """Send alert if consecutive failures exceed threshold."""
@@ -304,7 +304,7 @@ class NiumaBot:
                 self._last_alert_time = now
                 _send_alert(
                     f"{self._consecutive_failures} consecutive poll failures",
-                    "Teams API may be down or auth expired. Run: teams-cli auth login"
+                    "Teams API may be down or auth expired. Run: READ_WRITE_MODE=1 teams-cli auth login"
                 )
 
     def _record_poll_failure(self) -> None:
