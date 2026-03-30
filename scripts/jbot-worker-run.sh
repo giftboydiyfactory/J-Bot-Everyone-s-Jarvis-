@@ -46,7 +46,7 @@ echo "[$(date '+%H:%M:%S')] Task: $TASK_DESC"
 echo "[$(date '+%H:%M:%S')] CWD: $WORK_DIR"
 
 # Build worker system prompt
-WORKER_PROMPT="You are a J-Bot worker session [$SESSION_ID].
+WORKER_PROMPT="You are J-Bot, working on task [$SESSION_ID].
 Execute the task thoroughly.
 
 ## MANDATORY: Progress Reporting
@@ -121,7 +121,7 @@ report "✅ Task completed.<br/>$SAFE_RESULT"
 
 # Send completion to manager chat
 $SEND "$MANAGER_CHAT_ID" \
-    "<p><b>J-Bot</b> ✅ Worker <code>$SESSION_ID</code> finished.</p><p>$SAFE_RESULT</p><hr/><p><em>Sent by J-Bot</em></p>" \
+    "<p><b>J-Bot</b> ✅ Task <code>$SESSION_ID</code> done.</p><p>$SAFE_RESULT</p><hr/><p><em>Sent by J-Bot</em></p>" \
     2>/dev/null || true
 
 echo "[$(date '+%H:%M:%S')] Worker $SESSION_ID done."

@@ -63,7 +63,7 @@ safe_cwd = _html.escape(work_dir)
 send_chat_message_sync(
     chat_id=session_chat_id,
     html_body=(
-        f'<p><b>J-Bot</b> Worker session <code>{sid}</code> started</p>'
+        f'<p><b>J-Bot</b> Task <code>{sid}</code> started</p>'
         f'<p><b>Task:</b> {safe_desc}</p>'
         f'<p><b>CWD:</b> <code>{safe_cwd}</code></p>'
         f'<p>Progress updates will appear here.</p>'

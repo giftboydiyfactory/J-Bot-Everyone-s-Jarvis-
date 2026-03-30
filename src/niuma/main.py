@@ -141,9 +141,8 @@ class NiumaBot:
             # Send welcome message
             await self._responder.send_text(
                 self._manager_chat_id,
-                f"**{bot.emoji} {bot.name} Manager** started on `{hostname}`\n\n"
-                f"This is the Manager's communication channel. "
-                f"All user interactions and worker reports come through here."
+                f"**{bot.emoji} J-Bot** is online.\n\n"
+                f"Send me tasks, questions, or just say hi!"
             )
 
             # Add configured users as members of the manager chat
@@ -184,7 +183,7 @@ class NiumaBot:
             try:
                 await self._responder.send_text(
                     self._manager_chat_id,
-                    f"**{bot.emoji} {bot.name} Manager** is shutting down. Active workers will finish before exit.",
+                    f"**{bot.emoji} J-Bot** is restarting. Active tasks will continue.",
                 )
             except Exception:
                 pass
