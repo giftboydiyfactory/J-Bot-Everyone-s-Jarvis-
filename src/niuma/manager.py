@@ -224,28 +224,15 @@ class Manager:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-        # Timeout: Manager replies via tools, so it's safe to kill after timeout.
-        # Without this, a long-running Manager blocks the entire polling loop.
-        _MGR_TIMEOUT = 300  # 5 minutes
+        # Timeout: Manager sends replies via jbot-send.sh as it works.
+        # After timeout, release the poll loop but let Manager keep running in background.
+        _MGR_TIMEOUT = 1800  # 30 minutes
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_MGR_TIMEOUT)
         except asyncio.TimeoutError:
-            logger.warning("Manager timed out after %ds — killing process", _MGR_TIMEOUT)
-            proc.kill()
-            await proc.wait()
-            # Notify user that the request timed out
-            try:
-                from niuma.teams_api import send_chat_message_async
-                await send_chat_message_async(
-                    chat_id=chat_id,
-                    html_body=(
-                        "<p><b>【🤖J-Bot】</b> ⏱️ 处理超时（5分钟），请简化你的请求再试一次。"
-                        "复杂任务建议明确指定让我启动 Worker 来处理。</p>"
-                        "<hr/><p><em>🤖 Sent by J-Bot</em></p>"
-                    ),
-                )
-            except Exception:
-                pass
+            logger.warning("Manager still running after %ds — releasing poll loop (process continues in background)", _MGR_TIMEOUT)
+            # Don't kill — Manager is working and reporting via jbot-send.sh.
+            # Just return so the poll loop can process new messages.
             return
 
         if proc.returncode != 0:
