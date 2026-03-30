@@ -443,7 +443,10 @@ class NiumaBot:
             if not prompt:
                 continue
 
-            await self._handle_message(chat_id, msg.sender_email, prompt, msg.id)
+            # Fire-and-forget: don't block polling while Manager processes
+            self._fire_and_track(
+                self._handle_message(chat_id, msg.sender_email, prompt, msg.id)
+            )
 
     async def _poll_session_chat(self, chat_id: str) -> None:
         """Poll a session-dedicated chat. All messages auto-route to the bound session."""
@@ -520,8 +523,10 @@ class NiumaBot:
             if not prompt:
                 continue
 
-            # Route through Manager, responses go to manager chat
-            await self._handle_message(chat_id, msg.sender_email, prompt, msg.id)
+            # Fire-and-forget: don't block polling while Manager processes
+            self._fire_and_track(
+                self._handle_message(chat_id, msg.sender_email, prompt, msg.id)
+            )
 
     def _is_reply_only(self, chat_id: str) -> bool:
         # Use dynamic set if populated by poll_once, otherwise fall back to config
