@@ -71,16 +71,18 @@ def _build_worker_safety_prompt(bot_name: str = "jbot", chat_id: str = "") -> st
 
     if chat_id:
         prompt += (
-            "## Progress Reporting\n"
-            f"You can report progress directly to your Teams chat:\n"
+            "## MANDATORY: Progress Reporting\n"
+            "CRITICAL: The user CANNOT see your text output. "
+            "Your ONLY way to communicate is via jbot-send.sh. "
+            "If you don't call jbot-send.sh, the user sees NOTHING.\n\n"
+            f"Send progress to your Teams chat:\n"
             f"  bash {repo_dir}/scripts/jbot-send.sh \"{chat_id}\" "
             f"\"<p><b>【🤖J-Bot】</b> your message</p>"
-            f"<hr/><p><em>🤖 Sent by J-Bot</em></p>\"\n"
-            "Use this to send:\n"
-            "- Progress updates on long tasks (e.g. 'Scanning 500 files...')\n"
-            "- Intermediate findings before the final result\n"
-            "- The final result when you're done\n"
-            "Keep messages concise.\n\n"
+            f"<hr/><p><em>🤖 Sent by J-Bot</em></p>\"\n\n"
+            "You MUST call jbot-send.sh at least TWICE:\n"
+            "1. At the START — what you plan to do\n"
+            "2. At the END — the final result/summary\n"
+            "Also send updates after each major step.\n\n"
         )
 
     if _CACHED_SKILLS:

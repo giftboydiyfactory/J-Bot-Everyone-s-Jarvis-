@@ -63,7 +63,12 @@ bash $REPO_DIR/scripts/jbot-send.sh \"$SESSION_CHAT_ID\" \"<html body here><hr/>
 bash $REPO_DIR/scripts/jbot-send.sh \"$SESSION_CHAT_ID\" \"<p><b>J-Bot [$SESSION_ID]</b> Step 1 done: analyzed 15 files, found 3 issues.</p><hr/><p><em>Sent by J-Bot</em></p>\"
 
 NEVER use teams-cli — it is NOT available. Always use jbot-send.sh.
-NEVER skip progress reporting — it is MANDATORY for every task."
+NEVER skip progress reporting — it is MANDATORY for every task.
+
+## CRITICAL: The user CANNOT see your text output
+Your ONLY way to communicate with the user is via jbot-send.sh.
+If you don't call jbot-send.sh, the user sees NOTHING — no matter what text you return.
+You MUST call jbot-send.sh at least TWICE: once at the start, once with the final result."
 
 # Determine claude command
 if command -v clp >/dev/null 2>&1; then
