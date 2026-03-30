@@ -61,12 +61,25 @@ def _get_access_token() -> str:
         data = json.load(f)
 
     # Check file cache for a valid access token
+    # Prefer write-capable client (29c0325f) over read-only clients
+    _WRITE_CLIENT = "29c0325f"
+    write_token = None
+    fallback_token = None
     for _key, token_entry in data.get("AccessToken", {}).items():
         if int(token_entry.get("expires_on", 0)) > now:
-            with _token_lock:
-                _cached_token = token_entry["secret"]
-                _cached_token_expiry = int(token_entry.get("expires_on", 0))
-            return _cached_token
+            cid = token_entry.get("client_id") or token_entry.get("clientId", "")
+            if cid.startswith(_WRITE_CLIENT):
+                write_token = token_entry
+                break
+            elif not fallback_token:
+                fallback_token = token_entry
+
+    best = write_token or fallback_token
+    if best:
+        with _token_lock:
+            _cached_token = best["secret"]
+            _cached_token_expiry = int(best.get("expires_on", 0))
+        return _cached_token
 
     # No valid access token found — try to refresh using a refresh token
     logger.warning("Access token expired. Attempting to refresh using refresh token...")
