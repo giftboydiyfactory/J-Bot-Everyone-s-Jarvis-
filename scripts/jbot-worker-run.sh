@@ -85,35 +85,38 @@ fi
 
 echo "[$(date '+%H:%M:%S')] Running claude..."
 
-WORKER_OUTPUT=$($CLAUDE_CMD -p "$TASK_DESC" \
+# Capture stdout (JSON) and stderr separately
+WORKER_STDOUT_FILE=$(mktemp /tmp/jbot-worker-XXXXXX.json)
+$CLAUDE_CMD -p "$TASK_DESC" \
     --model opus \
     --output-format json \
     --permission-mode bypassPermissions \
     --name "jbot-${USER_EMAIL%%@*}-${SESSION_ID}" \
     --append-system-prompt "$WORKER_PROMPT" \
     --add-dir "$WORK_DIR" \
-    2>&1) || true
+    > "$WORKER_STDOUT_FILE" 2>/dev/null || true
 
 echo "[$(date '+%H:%M:%S')] Claude exited."
 
-# Extract result AND session_id from claude JSON output
-PARSE_OUTPUT=$(echo "$WORKER_OUTPUT" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    result = data.get('result', '') or ''
-    session_id = data.get('session_id', '') or ''
-    # Print result on line 1, session_id on line 2
-    print(result[:2000])
-    print(session_id)
-except:
-    raw = sys.stdin.read() if hasattr(sys.stdin, 'read') else ''
-    print(raw[:2000] if raw else 'Worker completed (no structured output)')
-    print('')
-" 2>/dev/null || echo -e "Worker completed\n")
+# Extract result and session_id from claude JSON output
+eval "$(python3 -c "
+import json, sys, shlex
 
-WORKER_RESULT=$(echo "$PARSE_OUTPUT" | head -1)
-CLAUDE_SESSION_ID=$(echo "$PARSE_OUTPUT" | tail -1)
+try:
+    data = json.load(open(sys.argv[1]))
+    result = (data.get('result', '') or '')[:2000]
+    sid = data.get('session_id', '') or ''
+except Exception:
+    result = 'Worker completed'
+    sid = ''
+
+# Output shell variable assignments
+print(f'WORKER_RESULT={shlex.quote(result)}')
+print(f'CLAUDE_SESSION_ID={shlex.quote(sid)}')
+" "$WORKER_STDOUT_FILE" 2>/dev/null || echo 'WORKER_RESULT="Worker completed"
+CLAUDE_SESSION_ID=""')"
+
+rm -f "$WORKER_STDOUT_FILE"
 
 echo "[$(date '+%H:%M:%S')] Result: ${WORKER_RESULT:0:200}"
 echo "[$(date '+%H:%M:%S')] Claude session: ${CLAUDE_SESSION_ID:-none}"
