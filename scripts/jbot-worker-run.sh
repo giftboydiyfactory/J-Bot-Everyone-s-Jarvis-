@@ -96,25 +96,39 @@ WORKER_OUTPUT=$($CLAUDE_CMD -p "$TASK_DESC" \
 
 echo "[$(date '+%H:%M:%S')] Claude exited."
 
-# Extract result
-WORKER_RESULT=$(echo "$WORKER_OUTPUT" | python3 -c "
+# Extract result AND session_id from claude JSON output
+PARSE_OUTPUT=$(echo "$WORKER_OUTPUT" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
-    r = data.get('result', '') or ''
-    print(r[:2000])
+    result = data.get('result', '') or ''
+    session_id = data.get('session_id', '') or ''
+    # Print result on line 1, session_id on line 2
+    print(result[:2000])
+    print(session_id)
 except:
     raw = sys.stdin.read() if hasattr(sys.stdin, 'read') else ''
     print(raw[:2000] if raw else 'Worker completed (no structured output)')
-" 2>/dev/null || echo "Worker completed")
+    print('')
+" 2>/dev/null || echo -e "Worker completed\n")
+
+WORKER_RESULT=$(echo "$PARSE_OUTPUT" | head -1)
+CLAUDE_SESSION_ID=$(echo "$PARSE_OUTPUT" | tail -1)
 
 echo "[$(date '+%H:%M:%S')] Result: ${WORKER_RESULT:0:200}"
+echo "[$(date '+%H:%M:%S')] Claude session: ${CLAUDE_SESSION_ID:-none}"
 
 # HTML-escape the result before embedding (prevents XSS from claude output)
 SAFE_RESULT=$(python3 -c "import html,sys; print(html.escape(sys.stdin.read()[:500]))" <<< "$WORKER_RESULT" 2>/dev/null || echo "$WORKER_RESULT")
 
-# Update DB
-update_db "completed" "$WORKER_RESULT"
+# Update DB with result + claude session ID (enables --resume for follow-up)
+python3 -c "
+import sys, sqlite3, time, pathlib
+db = sqlite3.connect(str(pathlib.Path.home() / '.jbot' / 'jbot.db'))
+db.execute('UPDATE sessions SET status=?, last_output=?, claude_session=?, updated_at=? WHERE id=?',
+    (sys.argv[1], sys.argv[2], sys.argv[3] or None, time.time(), sys.argv[4]))
+db.commit()
+" "completed" "$WORKER_RESULT" "$CLAUDE_SESSION_ID" "$SESSION_ID" 2>/dev/null || true
 
 # Send completion to dedicated session chat
 report "✅ Task completed.<br/>$SAFE_RESULT"
