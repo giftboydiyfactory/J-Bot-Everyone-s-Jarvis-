@@ -5,9 +5,14 @@ import asyncio
 import logging
 import os
 import signal
+import socket
 import sys
 from pathlib import Path
 from typing import Optional
+
+# Force 20s timeout on ALL sockets (including SSL handshake)
+# Without this, SSL handshake can hang for 60s+ freezing the poll loop
+socket.setdefaulttimeout(20)
 
 from niuma.config import NiumaConfig, load_config, ConfigError
 from niuma.db import Database

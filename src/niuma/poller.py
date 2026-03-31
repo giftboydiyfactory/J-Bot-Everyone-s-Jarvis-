@@ -41,6 +41,9 @@ class TeamsCliError(RuntimeError):
 
 def _graph_get_messages_sync(chat_id: str, limit: int = 25) -> list[dict[str, Any]]:
     """Fetch chat messages via Graph API (synchronous, for asyncio.to_thread)."""
+    import socket
+    socket.setdefaulttimeout(20)  # Force timeout on all sockets including SSL handshake
+
     from niuma.teams_api import _get_access_token
 
     token = _get_access_token()
