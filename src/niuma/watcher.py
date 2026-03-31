@@ -189,6 +189,13 @@ async def watch_session(
                 error_text = result_text or "Unknown error"
                 result_text = None
 
+            # Skip sending "Session expired" results — session.py handles this
+            # silently by auto-starting fresh. No need to notify user.
+            is_expired = result_text and "Session expired" in result_text
+            if is_expired:
+                logger.debug("Session %s expired — handled silently, skipping notifications", session_id)
+                return
+
             # Send result to Teams — but SKIP if session has a dedicated chat
             # (worker already sends its own results via jbot-send.sh in that case)
             has_session_chat = bool(session.get("session_chat_id"))
