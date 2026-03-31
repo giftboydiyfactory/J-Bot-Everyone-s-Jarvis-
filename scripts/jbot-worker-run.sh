@@ -24,8 +24,13 @@ export PYTHONPATH="$REPO_DIR/src:${PYTHONPATH:-}"
 SEND="bash $REPO_DIR/scripts/jbot-send.sh"
 
 # Helper: send progress to session chat (footer auto-appended by jbot-send.sh)
+# Uses a temp file to avoid shell expansion of HTML content
 report() {
-    $SEND "$SESSION_CHAT_ID" "<p><b>J-Bot [$SESSION_ID]</b> $1</p>" 2>/dev/null || true
+    local tmpfile
+    tmpfile=$(mktemp /tmp/jbot-report-XXXXXX)
+    printf '%s' "<p><b>J-Bot [$SESSION_ID]</b> $1</p>" > "$tmpfile"
+    $SEND "$SESSION_CHAT_ID" "$(cat "$tmpfile")" 2>/dev/null || true
+    rm -f "$tmpfile"
 }
 
 # Helper: update DB status
@@ -103,25 +108,23 @@ $CLAUDE_CMD -p "$TASK_DESC" \
 
 echo "[$(date '+%H:%M:%S')] Claude exited."
 
-# Extract result and session_id from claude JSON output
-eval "$(python3 -c "
-import json, sys, shlex
-
+# Extract result and session_id from claude JSON output (no eval — safe extraction)
+TMPDIR_PARSE=$(mktemp -d /tmp/jbot-parse-XXXXXX)
+python3 -c "
+import json, sys, pathlib
+tmpdir = sys.argv[2]
 try:
     data = json.load(open(sys.argv[1]))
-    result = (data.get('result', '') or '')[:2000]
-    sid = data.get('session_id', '') or ''
+    pathlib.Path(tmpdir, 'result').write_text((data.get('result', '') or '')[:2000])
+    pathlib.Path(tmpdir, 'session_id').write_text(data.get('session_id', '') or '')
 except Exception:
-    result = 'Worker completed'
-    sid = ''
+    pathlib.Path(tmpdir, 'result').write_text('Worker completed')
+    pathlib.Path(tmpdir, 'session_id').write_text('')
+" "$WORKER_STDOUT_FILE" "$TMPDIR_PARSE" 2>/dev/null || true
 
-# Output shell variable assignments
-print(f'WORKER_RESULT={shlex.quote(result)}')
-print(f'CLAUDE_SESSION_ID={shlex.quote(sid)}')
-" "$WORKER_STDOUT_FILE" 2>/dev/null || echo 'WORKER_RESULT="Worker completed"
-CLAUDE_SESSION_ID=""')"
-
-rm -f "$WORKER_STDOUT_FILE"
+WORKER_RESULT=$(cat "$TMPDIR_PARSE/result" 2>/dev/null || echo "Worker completed")
+CLAUDE_SESSION_ID=$(cat "$TMPDIR_PARSE/session_id" 2>/dev/null || echo "")
+rm -rf "$TMPDIR_PARSE" "$WORKER_STDOUT_FILE"
 
 echo "[$(date '+%H:%M:%S')] Result: ${WORKER_RESULT:0:200}"
 echo "[$(date '+%H:%M:%S')] Claude session: ${CLAUDE_SESSION_ID:-none}"
@@ -138,12 +141,12 @@ db.execute('UPDATE sessions SET status=?, last_output=?, claude_session=?, updat
 db.commit()
 " "completed" "$WORKER_RESULT" "$CLAUDE_SESSION_ID" "$SESSION_ID" 2>/dev/null || true
 
-# Send completion to dedicated session chat
-report "✅ Task completed.<br/>$SAFE_RESULT"
+# Send completion to dedicated session chat (via temp file for safety)
+COMPLETION_HTML=$(printf '<p><b>J-Bot [%s]</b> Task completed.</p><p>%s</p>' "$SESSION_ID" "$SAFE_RESULT")
+$SEND "$SESSION_CHAT_ID" "$COMPLETION_HTML" 2>/dev/null || true
 
-# Send completion to manager chat (footer auto-appended by jbot-send.sh)
-$SEND "$MANAGER_CHAT_ID" \
-    "<p><b>J-Bot</b> ✅ Task <code>$SESSION_ID</code> done.</p><p>$SAFE_RESULT</p>" \
-    2>/dev/null || true
+# Send completion to manager chat (via temp file for safety)
+MGR_HTML=$(printf '<p><b>J-Bot</b> Task <code>%s</code> done.</p><p>%s</p>' "$SESSION_ID" "$SAFE_RESULT")
+$SEND "$MANAGER_CHAT_ID" "$MGR_HTML" 2>/dev/null || true
 
 echo "[$(date '+%H:%M:%S')] Worker $SESSION_ID done."

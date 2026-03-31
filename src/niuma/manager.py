@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -21,17 +20,6 @@ if TYPE_CHECKING:
     from niuma.db import Database
 
 logger = logging.getLogger(__name__)
-
-# Regex to strip ★ Insight blocks from worker/manager output before sending to users
-_INSIGHT_PATTERN = re.compile(
-    r'`?★ Insight[^`]*`?\s*\n.*?`?─+`?\s*\n?',
-    re.DOTALL,
-)
-
-
-def _strip_insight_blocks(text: str) -> str:
-    """Remove ★ Insight blocks from text — these are internal, not user-facing."""
-    return _INSIGHT_PATTERN.sub('', text).strip()
 
 
 def _build_manager_system_prompt() -> str:

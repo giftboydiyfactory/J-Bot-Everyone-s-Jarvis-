@@ -9,9 +9,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
+
+from niuma.utils import strip_insight_blocks
 
 if TYPE_CHECKING:
     from niuma.main import NiumaBot
@@ -80,7 +81,7 @@ def _parse_latest_activity(jsonl_path: Path) -> Optional[str]:
             parts.append(f"Using: {last_tool}")
         if last_assistant_text:
             # Strip insight blocks and take last line for brevity
-            cleaned = re.sub(r'`?★ Insight.*?─+`?\s*', '', last_assistant_text, flags=re.DOTALL).strip()
+            cleaned = strip_insight_blocks(last_assistant_text)
             last_line = cleaned.split("\n")[-1].strip() if cleaned else ""
             if last_line:
                 parts.append(last_line[:100])

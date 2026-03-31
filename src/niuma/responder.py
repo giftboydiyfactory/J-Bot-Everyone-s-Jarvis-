@@ -4,27 +4,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import re
 from pathlib import Path
 from typing import Any, Optional
 
 import markdown
 
-# Strip ★ Insight blocks — internal annotations, not for end users
-_INSIGHT_PATTERN = re.compile(
-    r'`?★ Insight[^`]*`?\s*\n.*?`?─+`?\s*\n?',
-    re.DOTALL,
-)
+from niuma.utils import strip_insight_blocks
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_BOT_NAME = "jbot"
 _MAX_BODY_LEN = 2000
-
-
-def _make_signature(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> str:
-    display_name = "J-Bot" if bot_name == "jbot" else bot_name
-    return ""
 
 
 # Marker appended to all bot messages — Teams strips HTML comments,
@@ -38,8 +28,7 @@ def _make_prefix(bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> 
 
 
 def format_processing(session_id: str, bot_name: str = _DEFAULT_BOT_NAME, bot_emoji: str = "🤖") -> str:
-    sig = _make_signature(bot_name, bot_emoji)
-    return f"<p>session [<b>{_escape(session_id)}</b>] processing...</p>{sig}"
+    return f"<p>session [<b>{_escape(session_id)}</b>] processing...</p>"
 
 
 def format_result(
@@ -50,24 +39,21 @@ def format_result(
     bot_name: str = _DEFAULT_BOT_NAME,
     bot_emoji: str = "🤖",
 ) -> str:
-    sig = _make_signature(bot_name, bot_emoji)
     safe_sid = _escape(session_id)
     if error:
         return (
             f"<p>session [<b>{safe_sid}</b>] failed</p>"
             f"<p><code>{_escape(error[:500])}</code></p>"
-            f"{sig}"
         )
 
     text = result or ""
     # Strip internal insight blocks before showing to user
-    text = _INSIGHT_PATTERN.sub('', text).strip()
+    text = strip_insight_blocks(text)
     if len(text) <= _MAX_BODY_LEN:
         body_html = _md_to_html(text)
         return (
             f"<p><b>session [{safe_sid}] done</b></p>"
             f"{body_html}"
-            f"{sig}"
         )
 
     # Save full output, send truncated
@@ -90,7 +76,6 @@ def format_result(
         f"<p><b>session [{safe_sid}] done</b></p>"
         f"{body_html}"
         f"<p><em>...{truncated_note}</em></p>"
-        f"{sig}"
     )
 
 

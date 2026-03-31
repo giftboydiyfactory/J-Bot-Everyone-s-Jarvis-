@@ -206,9 +206,8 @@ class SessionManager:
         resume_cwd = session.get("cwd") or self._config.default_cwd
         chat_id = session.get("session_chat_id", "")
 
-        # If we have a claude session, try resuming. If expired, silently start fresh.
         if claude_session_id:
-            test_proc = await asyncio.create_subprocess_exec(
+            proc = await asyncio.create_subprocess_exec(
                 *claude_cmd, "-p", prompt,
                 "--resume", claude_session_id,
                 "--output-format", "json",
@@ -217,46 +216,7 @@ class SessionManager:
                 stderr=asyncio.subprocess.PIPE,
                 cwd=resume_cwd,
             )
-            # Quick check: expired sessions fail within seconds
-            try:
-                await asyncio.wait_for(test_proc.wait(), timeout=5)
-                stderr_bytes = await test_proc.stderr.read() if test_proc.stderr else b""
-                stderr_out = stderr_bytes.decode(errors="replace")
-                if test_proc.returncode != 0 and (
-                    "No conversation found" in stderr_out
-                    or "not a valid UUID" in stderr_out
-                ):
-                    logger.warning(
-                        "Session %s claude session expired — starting fresh silently",
-                        session_id,
-                    )
-                    await self._db.update_session(session_id, claude_session=None)
-                    claude_session_id = None  # Fall through to fresh start
-                elif test_proc.returncode == 0:
-                    # Completed quickly and successfully
-                    stdout_bytes = await test_proc.stdout.read() if test_proc.stdout else b""
-                    output = json.loads(stdout_bytes.decode(errors="replace"))
-                    await self._db.update_session(
-                        session_id, status="completed",
-                        claude_session=output.get("session_id", ""),
-                        last_output=(output.get("result", "") or "")[:10000],
-                        cost_usd=output.get("total_cost_usd", 0),
-                    )
-                    await self._db.add_message(session_id, "assistant", output.get("result", ""))
-                    logger.info("Session %s completed (quick)", session_id)
-                    return await self._db.get_session(session_id)
-                else:
-                    # Non-expired failure
-                    await self._db.update_session(
-                        session_id, status="failed", last_output=stderr_out[:5000],
-                    )
-                    logger.error("Session %s failed: %s", session_id, stderr_out[:200])
-                    return await self._db.get_session(session_id)
-            except asyncio.TimeoutError:
-                # Still running after 5s — normal long task, use this process
-                proc = test_proc
-
-        if not claude_session_id:
+        else:
             logger.info("Session %s starting fresh in same chat", session_id)
             proc = await asyncio.create_subprocess_exec(
                 *claude_cmd, "-p", prompt,
@@ -346,14 +306,29 @@ class SessionManager:
                         # Recurse (only once due to flag)
                         await self._wait_for_completion(session_id, retry_proc)
                         return
-                # If resume failed because claude session expired, clear it
-                # so next attempt starts fresh in the same chat
+                # If resume failed because claude session expired, silently
+                # start fresh — no notification to user
                 if "No conversation found" in error or "not a valid UUID" in error:
-                    await self._db.update_session(
-                        session_id, status="completed", claude_session=None,
-                        last_output="Session expired — will start fresh on next message"
+                    logger.warning("Session %s claude session expired — restarting fresh silently", session_id)
+                    await self._db.update_session(session_id, claude_session=None)
+                    session = await self._db.get_session(session_id)
+                    original_prompt = session.get("prompt", "") if session else ""
+                    chat_id = session.get("session_chat_id", "") if session else ""
+                    resume_cwd = (session.get("cwd") or self._config.default_cwd) if session else self._config.default_cwd
+                    fresh_proc = await asyncio.create_subprocess_exec(
+                        *_claude_command(), "-p", original_prompt,
+                        "--output-format", "json",
+                        "--name", f"jbot-resume-{session_id}",
+                        "--permission-mode", self._config.permission_mode,
+                        "--model", (session.get("model") or self._config.worker_model) if session else self._config.worker_model,
+                        "--append-system-prompt", _build_worker_safety_prompt(self._bot_name, chat_id),
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        cwd=resume_cwd,
                     )
-                    logger.warning("Session %s claude session expired — cleared for fresh start", session_id)
+                    self._active[session_id] = fresh_proc
+                    await self._wait_for_completion(session_id, fresh_proc)
+                    return
                 else:
                     await self._db.update_session(
                         session_id, status="failed", last_output=error[:5000]
