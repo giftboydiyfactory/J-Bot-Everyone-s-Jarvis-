@@ -195,26 +195,37 @@ class SessionManager:
             )
 
         claude_session_id = session.get("claude_session")
-        if not claude_session_id:
-            raise ValueError(
-                f"Session {session_id} was killed before completing — "
-                f"it has no claude session to resume. Please start a new task instead."
-            )
 
         await self._db.add_message(session_id, "user", prompt)
         await self._db.update_session(session_id, status="running")
 
         claude_cmd = _claude_command()
         resume_cwd = session.get("cwd") or self._config.default_cwd
-        proc = await asyncio.create_subprocess_exec(
-            *claude_cmd, "-p", prompt,
-            "--resume", claude_session_id,
-            "--output-format", "json",
-            "--permission-mode", self._config.permission_mode,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=resume_cwd,
-        )
+        chat_id = session.get("session_chat_id", "")
+
+        if claude_session_id:
+            proc = await asyncio.create_subprocess_exec(
+                *claude_cmd, "-p", prompt,
+                "--resume", claude_session_id,
+                "--output-format", "json",
+                "--permission-mode", self._config.permission_mode,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=resume_cwd,
+            )
+        else:
+            logger.info("Session %s has no claude session — starting fresh in same chat", session_id)
+            proc = await asyncio.create_subprocess_exec(
+                *claude_cmd, "-p", prompt,
+                "--output-format", "json",
+                "--name", f"jbot-resume-{session_id}",
+                "--permission-mode", self._config.permission_mode,
+                "--model", session.get("model") or self._config.worker_model,
+                "--append-system-prompt", _build_worker_safety_prompt(self._bot_name, chat_id),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=resume_cwd,
+            )
 
         self._active[session_id] = proc
         self._tasks[session_id] = asyncio.create_task(
@@ -292,10 +303,19 @@ class SessionManager:
                         # Recurse (only once due to flag)
                         await self._wait_for_completion(session_id, retry_proc)
                         return
-                await self._db.update_session(
-                    session_id, status="failed", last_output=error[:5000]
-                )
-                logger.error("Session %s failed: %s", session_id, error[:200])
+                # If resume failed because claude session expired, clear it
+                # so next attempt starts fresh in the same chat
+                if "No conversation found" in error or "not a valid UUID" in error:
+                    await self._db.update_session(
+                        session_id, status="completed", claude_session=None,
+                        last_output="Session expired — will start fresh on next message"
+                    )
+                    logger.warning("Session %s claude session expired — cleared for fresh start", session_id)
+                else:
+                    await self._db.update_session(
+                        session_id, status="failed", last_output=error[:5000]
+                    )
+                    logger.error("Session %s failed: %s", session_id, error[:200])
 
         except asyncio.TimeoutError:
             proc.kill()
