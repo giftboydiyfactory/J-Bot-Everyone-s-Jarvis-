@@ -4,10 +4,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
 import markdown
+
+# Strip ★ Insight blocks — internal annotations, not for end users
+_INSIGHT_PATTERN = re.compile(
+    r'`?★ Insight[^`]*`?\s*\n.*?`?─+`?\s*\n?',
+    re.DOTALL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +60,8 @@ def format_result(
         )
 
     text = result or ""
+    # Strip internal insight blocks before showing to user
+    text = _INSIGHT_PATTERN.sub('', text).strip()
     if len(text) <= _MAX_BODY_LEN:
         body_html = _md_to_html(text)
         return (

@@ -19,14 +19,23 @@ if [ -f "$VENV/bin/activate" ]; then
     source "$VENV/bin/activate"
 fi
 
-# Use Graph API directly
+# Use Graph API directly — auto-append footer, strip insight blocks
 PYTHONPATH="$REPO_DIR/src:${PYTHONPATH:-}" python3 -c "
+import sys, re
 from niuma.teams_api import send_chat_message_sync
-import sys
+
+body = sys.argv[2]
+
+# Strip insight blocks (internal annotations, not for users)
+body = re.sub(r'\x60?★ Insight[^\x60]*\x60?\s*\n.*?\x60?─+\x60?\s*\n?', '', body, flags=re.DOTALL).strip()
+
+# Auto-append footer if not already present
+if 'Sent by J-Bot' not in body:
+    body += '<hr/><p><em>🤖 Sent by J-Bot</em></p>'
 
 result = send_chat_message_sync(
     chat_id=sys.argv[1],
-    html_body=sys.argv[2],
+    html_body=body,
 )
 print(f'Sent: {result.get(\"id\", \"?\")[:20]}')
 " "$CHAT_ID" "$HTML_BODY"

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -78,8 +79,9 @@ def _parse_latest_activity(jsonl_path: Path) -> Optional[str]:
         if last_tool:
             parts.append(f"Using: {last_tool}")
         if last_assistant_text:
-            # Take last line of text for brevity
-            last_line = last_assistant_text.split("\n")[-1].strip()
+            # Strip insight blocks and take last line for brevity
+            cleaned = re.sub(r'`?★ Insight.*?─+`?\s*', '', last_assistant_text, flags=re.DOTALL).strip()
+            last_line = cleaned.split("\n")[-1].strip() if cleaned else ""
             if last_line:
                 parts.append(last_line[:100])
 

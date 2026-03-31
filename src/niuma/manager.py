@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -20,6 +21,17 @@ if TYPE_CHECKING:
     from niuma.db import Database
 
 logger = logging.getLogger(__name__)
+
+# Regex to strip ★ Insight blocks from worker/manager output before sending to users
+_INSIGHT_PATTERN = re.compile(
+    r'`?★ Insight[^`]*`?\s*\n.*?`?─+`?\s*\n?',
+    re.DOTALL,
+)
+
+
+def _strip_insight_blocks(text: str) -> str:
+    """Remove ★ Insight blocks from text — these are internal, not user-facing."""
+    return _INSIGHT_PATTERN.sub('', text).strip()
 
 
 def _build_manager_system_prompt() -> str:
@@ -49,14 +61,16 @@ jbot-send.sh uses Graph API directly with automatic token refresh.
 
 CRITICAL FORMATTING RULES:
 1. EVERY message MUST start with: <p><b>【🤖J-Bot】</b>
-2. EVERY message MUST end with: <hr/><p><em>🤖 Sent by J-Bot</em></p>
+2. DO NOT append any footer/signature — the system adds it automatically.
 3. ALWAYS use --html flag
 4. Use proper HTML: <p>, <b>, <ul>/<li>, <code>, <br/>, <table>
 5. Be concise — lead with the answer, use bullets for details
+6. NEVER include "★ Insight" blocks — those are internal only, never for users.
+7. NEVER send internal status like "已通知用户" or "Notified user" — only send substantive content.
 
 Example reply:
 ```bash
-bash {repo_dir}/scripts/jbot-send.sh "19:abc123@thread.v2" "<p><b>【🤖J-Bot】</b> Here is your answer.</p><hr/><p><em>🤖 Sent by J-Bot</em></p>"
+bash {repo_dir}/scripts/jbot-send.sh "19:abc123@thread.v2" "<p><b>【🤖J-Bot】</b> Here is your answer.</p>"
 ```
 
 ## Microsoft 365 Tools (all via Graph API — no CLI auth needed)
@@ -311,20 +325,23 @@ class Manager:
 
         # Fallback: if Manager returned a text result but didn't send it to Teams,
         # send it ourselves. This handles cases where Manager forgets to call jbot-send.sh.
+        # Skip internal/empty results that shouldn't reach the user.
         if result_text.strip() and chat_id:
-            import html as _html
-            safe_result = _html.escape(result_text[:1000])
-            try:
-                from niuma.teams_api import send_chat_message_async
-                await send_chat_message_async(
-                    chat_id=chat_id,
-                    html_body=(
-                        f"<p><b>【🤖J-Bot】</b> {safe_result}</p>"
-                        "<hr/><p><em>🤖 Sent by J-Bot</em></p>"
-                    ),
-                )
-            except Exception:
-                logger.warning("Failed to send fallback result to Teams", exc_info=True)
+            # Filter out internal messages and insight blocks
+            if any(skip in result_text for skip in ("已通知", "Notified user", "★ Insight")):
+                logger.debug("Skipping internal fallback result: %s", result_text[:100])
+            else:
+                import html as _html
+                clean = _strip_insight_blocks(result_text)
+                safe_result = _html.escape(clean[:1000])
+                try:
+                    from niuma.teams_api import send_chat_message_async
+                    await send_chat_message_async(
+                        chat_id=chat_id,
+                        html_body=f"<p><b>【🤖J-Bot】</b> {safe_result}</p>",
+                    )
+                except Exception:
+                    logger.warning("Failed to send fallback result to Teams", exc_info=True)
 
         # Save session ID for future resume (including across restarts)
         new_sid = outer.get("session_id")
