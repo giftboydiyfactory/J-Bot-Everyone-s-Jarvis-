@@ -98,7 +98,7 @@ source "$VENV/bin/activate"
 
 while true; do
     echo "$(date "+%Y-%m-%d %H:%M:%S") [watchdog] Starting J-Bot..." >> ~/.jbot/jbot.log
-    jbot 2>&1 | tee -a ~/.jbot/jbot.log || true
+    jbot >> ~/.jbot/jbot.log 2>&1 || true
     echo "$(date "+%Y-%m-%d %H:%M:%S") [watchdog] J-Bot exited. Restarting in 10s..." >> ~/.jbot/jbot.log
     sleep 10
 done
