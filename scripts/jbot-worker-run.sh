@@ -23,9 +23,9 @@ export PYTHONPATH="$REPO_DIR/src:${PYTHONPATH:-}"
 
 SEND="bash $REPO_DIR/scripts/jbot-send.sh"
 
-# Helper: send progress to session chat
+# Helper: send progress to session chat (footer auto-appended by jbot-send.sh)
 report() {
-    $SEND "$SESSION_CHAT_ID" "<p><b>J-Bot [$SESSION_ID]</b> $1</p><hr/><p><em>Sent by J-Bot</em></p>" 2>/dev/null || true
+    $SEND "$SESSION_CHAT_ID" "<p><b>J-Bot [$SESSION_ID]</b> $1</p>" 2>/dev/null || true
 }
 
 # Helper: update DB status
@@ -51,7 +51,12 @@ Execute the task thoroughly.
 
 ## MANDATORY: Progress Reporting
 You MUST report progress to your dedicated Teams chat using this exact command:
-bash $REPO_DIR/scripts/jbot-send.sh \"$SESSION_CHAT_ID\" \"<html body here><hr/><p><em>Sent by J-Bot</em></p>\"
+bash $REPO_DIR/scripts/jbot-send.sh \"$SESSION_CHAT_ID\" \"<html body here>\"
+
+FORMATTING RULES:
+- DO NOT append any footer/signature — jbot-send.sh adds it automatically.
+- NEVER include '★ Insight' blocks in messages — those are internal only.
+- NEVER send internal status like '已通知用户' or 'Notified user'.
 
 ### When to report:
 1. IMMEDIATELY when you start working — send what you plan to do
@@ -60,7 +65,7 @@ bash $REPO_DIR/scripts/jbot-send.sh \"$SESSION_CHAT_ID\" \"<html body here><hr/>
 4. ALWAYS at the end — send the final summary/result
 
 ### Report format example:
-bash $REPO_DIR/scripts/jbot-send.sh \"$SESSION_CHAT_ID\" \"<p><b>J-Bot [$SESSION_ID]</b> Step 1 done: analyzed 15 files, found 3 issues.</p><hr/><p><em>Sent by J-Bot</em></p>\"
+bash $REPO_DIR/scripts/jbot-send.sh \"$SESSION_CHAT_ID\" \"<p><b>J-Bot [$SESSION_ID]</b> Step 1 done: analyzed 15 files, found 3 issues.</p>\"
 
 NEVER use outlook-cli, calendar-cli, or teams-cli for write operations.
 NEVER skip progress reporting — it is MANDATORY for every task.
@@ -136,9 +141,9 @@ db.commit()
 # Send completion to dedicated session chat
 report "✅ Task completed.<br/>$SAFE_RESULT"
 
-# Send completion to manager chat
+# Send completion to manager chat (footer auto-appended by jbot-send.sh)
 $SEND "$MANAGER_CHAT_ID" \
-    "<p><b>J-Bot</b> ✅ Task <code>$SESSION_ID</code> done.</p><p>$SAFE_RESULT</p><hr/><p><em>Sent by J-Bot</em></p>" \
+    "<p><b>J-Bot</b> ✅ Task <code>$SESSION_ID</code> done.</p><p>$SAFE_RESULT</p>" \
     2>/dev/null || true
 
 echo "[$(date '+%H:%M:%S')] Worker $SESSION_ID done."

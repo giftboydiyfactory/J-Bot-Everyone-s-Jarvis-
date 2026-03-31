@@ -189,15 +189,18 @@ async def watch_session(
                 error_text = result_text or "Unknown error"
                 result_text = None
 
-            # Send result to Teams
-            if error_text:
-                await bot._responder.send_result(
-                    chat_id, session_id, error=error_text, reply_to=reply_to,
-                )
-            else:
-                await bot._responder.send_result(
-                    chat_id, session_id, result=result_text, reply_to=reply_to,
-                )
+            # Send result to Teams — but SKIP if session has a dedicated chat
+            # (worker already sends its own results via jbot-send.sh in that case)
+            has_session_chat = bool(session.get("session_chat_id"))
+            if not has_session_chat:
+                if error_text:
+                    await bot._responder.send_result(
+                        chat_id, session_id, error=error_text, reply_to=reply_to,
+                    )
+                else:
+                    await bot._responder.send_result(
+                        chat_id, session_id, result=result_text, reply_to=reply_to,
+                    )
 
             # Feed result back to Manager so it remembers and can report to user
             # Manager replies directly via jbot-send.sh, no parsing needed
