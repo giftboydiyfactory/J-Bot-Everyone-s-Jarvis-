@@ -323,25 +323,9 @@ class Manager:
         result_text = str(outer.get("result", ""))
         logger.info("MGR result (first 300): %s", result_text[:300])
 
-        # Fallback: if Manager returned a text result but didn't send it to Teams,
-        # send it ourselves. This handles cases where Manager forgets to call jbot-send.sh.
-        # Skip internal/empty results that shouldn't reach the user.
-        if result_text.strip() and chat_id:
-            # Filter out internal messages and insight blocks
-            if any(skip in result_text for skip in ("已通知", "Notified user", "★ Insight")):
-                logger.debug("Skipping internal fallback result: %s", result_text[:100])
-            else:
-                import html as _html
-                clean = _strip_insight_blocks(result_text)
-                safe_result = _html.escape(clean[:1000])
-                try:
-                    from niuma.teams_api import send_chat_message_async
-                    await send_chat_message_async(
-                        chat_id=chat_id,
-                        html_body=f"<p><b>【🤖J-Bot】</b> {safe_result}</p>",
-                    )
-                except Exception:
-                    logger.warning("Failed to send fallback result to Teams", exc_info=True)
+        # Manager sends directly to Teams via jbot-send.sh during execution.
+        # The result_text here is just the Claude output summary — NOT for sending.
+        # Only log it for debugging; no fallback send needed.
 
         # Save session ID for future resume (including across restarts)
         new_sid = outer.get("session_id")
