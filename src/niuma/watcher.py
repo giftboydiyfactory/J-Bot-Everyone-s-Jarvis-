@@ -209,13 +209,15 @@ async def watch_session(
                         chat_id, session_id, result=result_text, reply_to=reply_to,
                     )
 
-            # Feed result back to Manager so it remembers and can report to user
-            # Manager replies directly via jbot-send.sh, no parsing needed
+            # Feed result back to Manager for context — Manager replies to its OWN chat,
+            # not the session chat (worker already reported there).
+            mgr_chat = getattr(bot, '_manager_chat_id', '') or ''
             await bot._manager.feed_worker_result(
                 session_id=session_id,
                 result=result_text or error_text or "",
                 status=status,
                 chat_id=chat_id,
+                manager_chat_id=mgr_chat,
             )
 
             # Auto-resume with queued messages if any were saved while worker was busy

@@ -345,21 +345,26 @@ class Manager:
         result: str,
         status: str,
         chat_id: str,
+        manager_chat_id: str = "",
     ) -> None:
-        """Feed a worker's result back to the Manager for processing.
+        """Feed a worker's result back to the Manager for context tracking.
 
-        The Manager can then decide to report to user, assign follow-up, etc.
-        It replies directly via jbot-send.sh to the given chat_id.
+        The Manager sends its summary to the MANAGER chat (not the session chat)
+        to avoid duplicating what the Worker already sent to the session chat.
         """
+        # Use manager chat for Manager's reply — worker already reported to session chat
+        reply_chat = manager_chat_id or chat_id
         context = (
             f"[WORKER RESULT] Session [{session_id}] finished with status={status}.\n"
+            f"The worker already sent results to the session chat. "
+            f"Send your summary to the MANAGER chat only (chat_id below), NOT the session chat.\n"
             f"Output:\n{result[:3000]}"
         )
         try:
             await self.process(
                 user_message="",
                 user_email="system",
-                chat_id=chat_id,
+                chat_id=reply_chat,
                 context=context,
             )
         except Exception:
