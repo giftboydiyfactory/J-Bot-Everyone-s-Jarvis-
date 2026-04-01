@@ -29,6 +29,7 @@ class TeamsMessage:
     body: str
     body_raw: str  # Original HTML before stripping — used for bot message detection
     timestamp: str
+    image_urls: tuple[str, ...] = ()  # Graph API URLs for inline images
 
 
 class TeamsCliError(RuntimeError):
@@ -114,6 +115,7 @@ class Poller:
             if not email:
                 email = from_user.get("displayName", from_user.get("id", "unknown"))
             body_raw = msg.get("body", {}).get("content", "")
+            image_urls = _extract_image_urls(body_raw)
             result.append(TeamsMessage(
                 id=msg.get("id", ""),
                 sender=from_user.get("displayName", "unknown"),
@@ -121,6 +123,7 @@ class Poller:
                 body=_strip_html(body_raw),
                 body_raw=body_raw,
                 timestamp=msg.get("createdDateTime", ""),
+                image_urls=tuple(image_urls),
             ))
         return result
 
@@ -156,6 +159,18 @@ class Poller:
                 elif msg.id == last_seen_id:
                     found = True
             return new_messages
+
+
+def _extract_image_urls(body_html: str) -> list[str]:
+    """Extract Graph API hosted content image URLs from Teams message HTML.
+
+    Teams inline images use: <img src="https://graph.microsoft.com/.../hostedContents/.../\$value" .../>
+    """
+    return re.findall(
+        r'<img\s+[^>]*src="(https://graph\.microsoft\.com/[^"]*hostedContents[^"]*)"',
+        body_html,
+        re.IGNORECASE,
+    )
 
 
 def _strip_html(text: str) -> str:

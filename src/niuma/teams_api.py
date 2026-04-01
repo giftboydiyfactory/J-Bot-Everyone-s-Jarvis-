@@ -267,6 +267,29 @@ async def add_chat_member_async(*, chat_id: str, user_email: str) -> None:
     await asyncio.to_thread(add_chat_member, chat_id=chat_id, user_email=user_email)
 
 
+def download_hosted_content_sync(url: str, dest_path: str) -> bool:
+    """Download a Teams hosted content (image) via Graph API.
+
+    The url is the full Graph API URL from an <img> tag in a message body.
+    Returns True if successful, False otherwise.
+    """
+    token = _get_access_token()
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"Bearer {token}")
+    try:
+        resp = urllib.request.urlopen(req, timeout=30)
+        Path(dest_path).write_bytes(resp.read())
+        return True
+    except Exception as exc:
+        logger.warning("Failed to download hosted content %s: %s", url[:80], exc)
+        return False
+
+
+async def download_hosted_content_async(url: str, dest_path: str) -> bool:
+    """Async wrapper for download_hosted_content_sync."""
+    return await asyncio.to_thread(download_hosted_content_sync, url, dest_path)
+
+
 def send_chat_message_sync(*, chat_id: str, html_body: str) -> dict[str, Any]:
     """Send an HTML message to a Teams chat via Graph API (no teams-cli needed).
 

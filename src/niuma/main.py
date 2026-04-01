@@ -17,7 +17,7 @@ socket.setdefaulttimeout(20)
 from niuma.config import NiumaConfig, load_config, ConfigError
 from niuma.db import Database
 from niuma.manager import Manager
-from niuma.poller import Poller
+from niuma.poller import Poller, TeamsMessage
 from niuma.teams_api import create_session_chat_async as create_session_chat
 from niuma.responder import Responder
 from niuma.session import SessionManager
@@ -33,6 +33,38 @@ _DEFAULT_CONFIG = Path.home() / ".jbot" / "config.yaml"
 _BOT_STATE_MANAGER_CHAT = "manager_chat_id"
 
 _GRACEFUL_SHUTDOWN_TIMEOUT = 30  # seconds to wait for running workers on SIGTERM/SIGINT
+
+_IMAGE_DIR = Path.home() / ".jbot" / "images"
+
+
+async def _download_message_images(msg: TeamsMessage) -> str:
+    """Download inline images from a Teams message and return augmented prompt.
+
+    If the message contains images, downloads them to ~/.jbot/images/
+    and appends file paths to the prompt text so Claude can read them.
+    """
+    if not msg.image_urls:
+        return ""
+
+    from niuma.teams_api import download_hosted_content_async
+
+    _IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    paths: list[str] = []
+    for i, url in enumerate(msg.image_urls):
+        ext = "png"  # Teams inline images are typically PNG
+        dest = _IMAGE_DIR / f"{msg.id}_{i}.{ext}"
+        ok = await download_hosted_content_async(url, str(dest))
+        if ok:
+            paths.append(str(dest))
+            logger.info("Downloaded image: %s", dest)
+
+    if not paths:
+        return ""
+
+    attachment_text = "\n\n[Attached images — use the Read tool to view them:]\n"
+    for p in paths:
+        attachment_text += f"  - {p}\n"
+    return attachment_text
 
 
 def _send_alert(title: str, message: str) -> None:
@@ -433,8 +465,13 @@ class NiumaBot:
                 continue
 
             prompt = self._poller.extract_prompt(msg)
-            if not prompt:
+            if not prompt and not msg.image_urls:
                 continue
+
+            # Download inline images and append paths to prompt
+            img_text = await _download_message_images(msg)
+            if img_text:
+                prompt = (prompt or "(see attached images)") + img_text
 
             # Fire-and-forget: don't block polling while Manager processes
             self._fire_and_track(
@@ -467,6 +504,12 @@ class NiumaBot:
                 continue
 
             prompt = msg.body.strip()
+
+            # Download inline images and append paths to prompt
+            img_text = await _download_message_images(msg)
+            if img_text:
+                prompt = (prompt or "(see attached images)") + img_text
+
             if not prompt:
                 continue
 
@@ -513,6 +556,12 @@ class NiumaBot:
             if "Sent by J-Bot" in msg.body_raw or "ai-pim-utils" in msg.body_raw or "Sent by niuma" in msg.body_raw or "【🤖J-Bot】" in msg.body:
                 continue
             prompt = msg.body.strip()
+
+            # Download inline images and append paths to prompt
+            img_text = await _download_message_images(msg)
+            if img_text:
+                prompt = (prompt or "(see attached images)") + img_text
+
             if not prompt:
                 continue
 
