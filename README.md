@@ -16,8 +16,8 @@ J-Bot is a **persistent AI coordinator** with full tool access. It can:
 
 ```bash
 # 1. Clone & install
-git clone https://github.com/giftboydiyfactory/J-Bot-Everyone-s-Jarvis-.git
-cd J-Bot-Everyone-s-Jarvis-
+git clone git@gitlab-master.nvidia.com:interconnect_sh_dev/j-bot-everyone-s-jarvis.git
+cd j-bot-everyone-s-jarvis
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
