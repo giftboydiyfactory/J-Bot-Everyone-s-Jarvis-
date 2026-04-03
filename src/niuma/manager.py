@@ -268,7 +268,10 @@ class Manager:
         except asyncio.TimeoutError:
             logger.warning("Manager still running after %ds — releasing poll loop (process continues in background)", _MGR_TIMEOUT)
             # Don't kill — Manager is working and reporting via jbot-send.sh.
-            # Just return so the poll loop can process new messages.
+            # Mark as initialized so next call attempts resume, not duplicate creation.
+            if not self._initialized:
+                self._initialized = True
+                logger.info("Manager first-call timeout — marking initialized to prevent duplicate sessions")
             return
 
         if proc.returncode != 0:

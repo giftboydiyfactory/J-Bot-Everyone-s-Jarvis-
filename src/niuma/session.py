@@ -153,7 +153,7 @@ class SessionManager:
             "--permission-mode", self._config.permission_mode,
             "--model", work_model,
             "--add-dir", work_dir,
-            "--append-system-prompt", _build_worker_safety_prompt(self._bot_name),
+            "--append-system-prompt", _build_worker_safety_prompt(self._bot_name, chat_id),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=work_dir,
