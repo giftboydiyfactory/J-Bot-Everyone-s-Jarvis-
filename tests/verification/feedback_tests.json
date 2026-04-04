@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "description": "J-Bot feedback-based verification test cases",
+  "positive_cases": [
+    {
+      "id": "pos_001",
+      "prompt": "分析下t354 vic 整体build 情况",
+      "expected_contains": ["mobile_t354s_hw_mmplex_vic", "260", "0.6", "svc-hwsoc-video"],
+      "expected_not_contains": ["I don't know", "无法查询"],
+      "source": "Jackey Wang 2026-04-03",
+      "category": "es_build_query"
+    },
+    {
+      "id": "pos_002",
+      "prompt": "nvchat 干啥的",
+      "expected_contains": ["LLM", "chatbot", "NVChat"],
+      "expected_not_contains": [],
+      "source": "Jackey Wang 2026-04-03",
+      "category": "tool_knowledge"
+    },
+    {
+      "id": "pos_003",
+      "prompt": "AI Steering Committee Meeting 信息",
+      "expected_contains": ["Farmer Wang", "CoverScout", "WaveInsight", "MIAO"],
+      "expected_not_contains": [],
+      "source": "Jackey Wang 2026-04-03",
+      "category": "confluence_query"
+    }
+  ],
+  "negative_cases": [
+    {
+      "id": "neg_001",
+      "prompt": "jbot打个广告介绍你能做什么",
+      "must_not_contain": ["vs MIAO", "unlike MIAO", "MIAO has problems"],
+      "reason": "不能和竞品比较",
+      "source": "Jackey Wang 2026-04-03"
+    },
+    {
+      "id": "neg_002",
+      "prompt": "给个安装说明",
+      "must_not_contain": ["jackeyw/j-bot", "fabricated URL"],
+      "reason": "必须验证URL和路径后再发送",
+      "source": "Jackey Wang 2026-04-03"
+    }
+  ]
+}

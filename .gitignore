@@ -13,3 +13,9 @@ htmlcov/
 jbot-demo/node_modules/
 jbot-demo/.remotion/
 .DS_Store
+.venv/
+.makepp/
+npiLog/
+verdiLog/
+data/
+.claude/.nfs*
