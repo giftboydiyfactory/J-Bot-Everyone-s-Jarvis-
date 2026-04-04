@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Weekly Report — Jackey Wang (jackeyw) — W14 2026</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; color: #333; }
+  .container { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+  .header { background: linear-gradient(135deg, #76b900, #4a8c00); color: #fff; padding: 28px 32px; }
+  .header h1 { margin: 0 0 6px 0; font-size: 22px; }
+  .header .subtitle { font-size: 14px; opacity: 0.9; }
+  .content { padding: 28px 32px; }
+  h2 { color: #4a8c00; border-bottom: 2px solid #76b900; padding-bottom: 6px; margin-top: 28px; font-size: 17px; }
+  h2:first-child { margin-top: 0; }
+  h3 { color: #555; font-size: 14px; margin: 14px 0 6px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+  th { background: #f0f7e4; color: #4a8c00; text-align: left; padding: 8px 10px; border: 1px solid #ddd; }
+  td { padding: 8px 10px; border: 1px solid #ddd; vertical-align: top; }
+  tr:nth-child(even) { background: #fafafa; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: #fff; }
+  .badge-green { background: #76b900; }
+  .badge-yellow { background: #e8a800; }
+  .badge-red { background: #d32f2f; }
+  .badge-blue { background: #1976d2; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 14px 0; }
+  .stat-box { background: #f8faf3; border: 1px solid #d4e8b0; border-radius: 6px; padding: 14px; text-align: center; }
+  .stat-box .number { font-size: 28px; font-weight: 700; color: #4a8c00; }
+  .stat-box .label { font-size: 12px; color: #666; margin-top: 4px; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 6px; font-size: 13px; line-height: 1.5; }
+  .section-note { font-size: 12px; color: #888; font-style: italic; margin-top: 4px; }
+  .risk-item { padding: 8px 12px; margin: 6px 0; border-radius: 4px; font-size: 13px; }
+  .risk-high { background: #fde8e8; border-left: 4px solid #d32f2f; }
+  .risk-medium { background: #fff8e1; border-left: 4px solid #e8a800; }
+  .risk-low { background: #e8f5e9; border-left: 4px solid #76b900; }
+  .footer { background: #f9f9f9; border-top: 1px solid #eee; padding: 16px 32px; font-size: 11px; color: #999; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Header -->
+<div class="header">
+  <h1>Weekly Engineering Report</h1>
+  <div class="subtitle">Jackey Wang (jackeyw) &nbsp;|&nbsp; MMPLEX &nbsp;|&nbsp; Week 14: March 31 - April 3, 2026</div>
+</div>
+
+<div class="content">
+
+<!-- Executive Summary -->
+<h2>Executive Summary</h2>
+<ul>
+  <li><strong>J-Bot Self-Evolution Session (自我进化)</strong> --- 完成了迄今为止最大规模的知识获取 session: 55个学习周期, 生成83个 memory files, 系统性 mapping 了 900+ NVIDIA agentic skills and tools across the entire MMPLEX ecosystem.</li>
+  <li><strong>J-Bot Core Stability</strong> --- 本周提交 <strong>29 commits</strong>, 修复了 Teams messaging pipeline 的多个 critical issues (deadlock, auth fallback, session 管理, duplicate message 消除), 系统稳定性显著提升.</li>
+  <li><strong>Security Remediation</strong> --- 发现并修复了一个 critical security issue: 65份 internal knowledge docs 被意外推送到 public git repo, 已执行 history rewrite 并彻底清除.</li>
+  <li><strong>Knowledge Base Established</strong> --- 建立了完整的 NVIDIA AI tools knowledge graph: 30+ tools catalogued, 6 architecture patterns identified, top 10 integration APIs ranked by impact x feasibility.</li>
+</ul>
+
+<!-- Key Metrics -->
+<h2>Key Metrics</h2>
+<div class="stat-grid">
+  <div class="stat-box">
+    <div class="number">29</div>
+    <div class="label">Git Commits</div>
+  </div>
+  <div class="stat-box">
+    <div class="number">55</div>
+    <div class="label">Learning Cycles</div>
+  </div>
+  <div class="stat-box">
+    <div class="number">83</div>
+    <div class="label">Memory Files</div>
+  </div>
+  <div class="stat-box">
+    <div class="number">900+</div>
+    <div class="label">Skills Mapped</div>
+  </div>
+</div>
+
+<!-- Workload Breakdown -->
+<h2>Workload Breakdown</h2>
+<table>
+  <tr>
+    <th>Project / Area</th>
+    <th>Effort %</th>
+    <th>Description</th>
+    <th>Status</th>
+  </tr>
+  <tr>
+    <td><strong>J-Bot Self-Evolution</strong></td>
+    <td>50%</td>
+    <td>55-cycle deep exploration of NVIDIA MMPLEX ecosystem; 83 structured memory files covering tools, platforms, architecture patterns</td>
+    <td><span class="badge badge-green">DONE</span></td>
+  </tr>
+  <tr>
+    <td><strong>J-Bot Core (Bug Fixes)</strong></td>
+    <td>30%</td>
+    <td>Teams messaging reliability: deadlock fix, auth token handling, session management, duplicate elimination, poll loop stability</td>
+    <td><span class="badge badge-green">DONE</span></td>
+  </tr>
+  <tr>
+    <td><strong>Security Remediation</strong></td>
+    <td>10%</td>
+    <td>Internal info leak to public repo: git history rewrite, .gitignore hardening, docs/ cleanup</td>
+    <td><span class="badge badge-green">DONE</span></td>
+  </tr>
+  <tr>
+    <td><strong>Feature Development</strong></td>
+    <td>10%</td>
+    <td>Inline image support in Teams messages, Graph API wrappers for email/calendar</td>
+    <td><span class="badge badge-green">DONE</span></td>
+  </tr>
+</table>
+
+<!-- Key Achievements -->
+<h2>Key Achievements</h2>
+
+<h3>1. J-Bot Self-Evolution Session (4/1 - 4/2)</h3>
+<ul>
+  <li>完成 <strong>55 learning cycles</strong>, 系统性分析了 MMPLEX 全部 AI toolchain, 包括: ARIS (149 skills), MIAO (multi-agent), Intellibuild, EurekaCLI, MRAG, WaveInsight, Nighthawk, CoverScout 等 30+ tools</li>
+  <li>Discovered <strong>NVHS 3-tier skills platform</strong>: 225+ skills across NVIDIA (nvSkills 97, ChipSim 32, MMPLEX 49), 30-second onboarding model</li>
+  <li>Mapped <strong>AI Chip Design Health Card</strong>: 9 strategic initiatives tracked weekly (650-700 skills/week), including R2D2, Mentis, Viva, CTL, PPA agents</li>
+  <li>Identified 6 reusable <strong>architecture patterns</strong>: Hybrid Programmatic+LLM Pipeline, Central LLM Gateway, Gated Submit, Reflection-Based Tool Registration, PWA Two-Layer, Recipe-Based Document Processing</li>
+  <li>Built <strong>Integration Roadmap</strong>: ranked top 10 APIs by impact x feasibility (ES Build DB #1, ARMS REST #2, NVBugs #3)</li>
+  <li>Analyzed agent deployment landscape: MARS, NCS Agentic Deploy, Agent Plugins architecture, GAS platform</li>
+</ul>
+
+<h3>2. J-Bot Core Stability (3/30 - 4/2)</h3>
+<table>
+  <tr>
+    <th>Commit</th>
+    <th>Date</th>
+    <th>Issue Fixed</th>
+    <th>Severity</th>
+  </tr>
+  <tr>
+    <td><code>c6ddaaf</code></td>
+    <td>3/29</td>
+    <td>Token refresh deadlock (Lock -> RLock)</td>
+    <td><span class="badge badge-red">CRITICAL</span></td>
+  </tr>
+  <tr>
+    <td><code>7521dbb</code></td>
+    <td>3/31</td>
+    <td>Proactive token refresh causing poll loop hangs</td>
+    <td><span class="badge badge-red">CRITICAL</span></td>
+  </tr>
+  <tr>
+    <td><code>2cf1f52</code></td>
+    <td>3/31</td>
+    <td>60s hard timeout on poll cycle to prevent network hangs</td>
+    <td><span class="badge badge-yellow">HIGH</span></td>
+  </tr>
+  <tr>
+    <td><code>7386920</code></td>
+    <td>3/31</td>
+    <td>Global socket timeout 20s for SSL handshake hangs</td>
+    <td><span class="badge badge-yellow">HIGH</span></td>
+  </tr>
+  <tr>
+    <td><code>87200d2</code></td>
+    <td>3/31</td>
+    <td>Manager dispatcher-only enforcement, prevent fake worker claims</td>
+    <td><span class="badge badge-yellow">HIGH</span></td>
+  </tr>
+  <tr>
+    <td><code>d9260f0</code></td>
+    <td>3/31</td>
+    <td>Session chat routing fix (stays in same chat)</td>
+    <td><span class="badge badge-blue">MEDIUM</span></td>
+  </tr>
+  <tr>
+    <td><code>cdf1ae6</code></td>
+    <td>3/31</td>
+    <td>Code review sweep: resolved all CRITICAL + HIGH issues</td>
+    <td><span class="badge badge-blue">MEDIUM</span></td>
+  </tr>
+</table>
+
+<h3>3. Security Remediation (4/2)</h3>
+<ul>
+  <li><strong>Issue:</strong> 65 internal knowledge documents (containing tool paths, API endpoints, architecture details, chat IDs) were accidentally pushed to the public GitHub repository.</li>
+  <li><strong>Action:</strong> Executed git history rewrite to completely purge sensitive content. Added <code>docs/knowledge/</code> to <code>.gitignore</code>. Established memory-based rule: all internal info stored in local memory files only.</li>
+  <li><strong>Commit:</strong> <code>d8530f6</code> --- "fix: remove all internal knowledge docs from public repo"</li>
+  <li><strong>Prevention:</strong> Created feedback memory (<code>feedback_no_internal_to_git.md</code>) to prevent recurrence in future sessions.</li>
+</ul>
+
+<h3>4. New Features (3/30 - 4/1)</h3>
+<ul>
+  <li><strong>Inline Images in Teams</strong> (<code>dc2fcf9</code>): J-Bot 现在支持在 Teams 消息中嵌入 inline images, 使用 Graph API 的 <code>Accept: image/*</code> header</li>
+  <li><strong>Graph API Wrappers</strong> (<code>a9bb8eb</code>, <code>72c4061</code>): 新增 Outlook email send 和 calendar event creation 的 Graph API 封装, 为后续 daily summary 功能铺路</li>
+</ul>
+
+<!-- Bug Status -->
+<h2>Bug Status</h2>
+<table>
+  <tr>
+    <th>Category</th>
+    <th>Count</th>
+    <th>Details</th>
+  </tr>
+  <tr>
+    <td>NVBugs Assigned (Open)</td>
+    <td>0</td>
+    <td>No open bugs currently assigned to jackeyw</td>
+  </tr>
+  <tr>
+    <td>P4 Changelists (Submitted)</td>
+    <td>0</td>
+    <td>No P4 commits this week (focus was on J-Bot development)</td>
+  </tr>
+  <tr>
+    <td>J-Bot Issues Fixed</td>
+    <td>15+</td>
+    <td>Deadlock, auth, session, messaging, duplicate elimination -- all via git commits</td>
+  </tr>
+</table>
+<p class="section-note">NVBugs query returned 0 open bugs. P4 queries for //hw/ tree returned no submitted CLs for this period.</p>
+
+<!-- Next Week Plan -->
+<h2>Next Week Plan (W15: April 6-10)</h2>
+<table>
+  <tr>
+    <th>#</th>
+    <th>Task</th>
+    <th>Priority</th>
+    <th>Expected Outcome</th>
+  </tr>
+  <tr>
+    <td>1</td>
+    <td>Build operational ES query skill for Build DB</td>
+    <td><span class="badge badge-red">P0</span></td>
+    <td>J-Bot 能直接查询 build metrics (wall time, job duration, longpole analysis)</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>P4 analytics helper (commit counts, AI adoption tracking)</td>
+    <td><span class="badge badge-yellow">P1</span></td>
+    <td>Automated weekly P4 activity reports with AUTOTAG extraction</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>Scheduled/timed execution for J-Bot tasks</td>
+    <td><span class="badge badge-yellow">P1</span></td>
+    <td>支持定时执行 (top user demand from MIAO analysis: 29% of requests)</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>Cross-source daily summary aggregation</td>
+    <td><span class="badge badge-blue">P2</span></td>
+    <td>Mail + bugs + submits + Teams -> automated daily digest</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td>LLM Gateway integration exploration</td>
+    <td><span class="badge badge-blue">P2</span></td>
+    <td>验证 API authentication, 评估 domain-specific copilot access feasibility</td>
+  </tr>
+</table>
+
+<!-- Risks & Dependencies -->
+<h2>Risks &amp; Dependencies</h2>
+
+<div class="risk-medium">
+  <strong>[MEDIUM] OmniStation Access</strong> --- OmniStation sandbox VM (用于 auto-run AI agents) 因 3E001 export control 限制, China/HK region 暂时无法访问. 正在关注 policy 更新.
+</div>
+
+<div class="risk-medium">
+  <strong>[MEDIUM] OneDrive CLI Admin Consent</strong> --- onedrive-cli 需要 admin consent 才能使用, 目前处于 BLOCKED 状态. File upload/sharing 功能暂时依赖 manual workaround.
+</div>
+
+<div class="risk-low">
+  <strong>[LOW] Kerberos Auth for Build Metrics</strong> --- 部分 build metrics dashboard endpoints 需要 Kerberos 认证, 目前使用 ES direct query bypass. 如果 access policy 变更, 需要 fallback plan.
+</div>
+
+<div class="risk-low">
+  <strong>[LOW] Agent Deployment Platform Choice</strong> --- 多个 agent hosting platforms 并存 (MARS, NCS, Agent Plugins). 需要在下周确定 J-Bot 的 long-term deployment strategy.
+</div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  Generated: April 3, 2026 &nbsp;|&nbsp; J-Bot Weekly Report System &nbsp;|&nbsp; MMPLEX Engineering
+</div>
+
+</div>
+</body>
+</html>
