@@ -67,6 +67,8 @@ _ALLOWED_SESSION_FIELDS = frozenset({
     "cost_usd",
     "trigger_message_id",
     "session_chat_id",
+    "report_chat_ids",
+    "last_heartbeat",
     "updated_at",
 })
 
@@ -96,6 +98,7 @@ class Database:
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = await aiosqlite.connect(self._db_path)
         self._conn.row_factory = aiosqlite.Row
+        await self._conn.execute("PRAGMA busy_timeout = 10000")
         await self._conn.executescript(_SCHEMA)
         await self._conn.commit()
         await self._migrate()
@@ -109,6 +112,7 @@ class Database:
             pass
         self._conn = await aiosqlite.connect(self._db_path)
         self._conn.row_factory = aiosqlite.Row
+        await self._conn.execute("PRAGMA busy_timeout = 10000")
 
     async def _migrate(self) -> None:
         """Apply any additive migrations that are safe to re-run.
@@ -121,6 +125,10 @@ class Database:
             "CREATE TABLE IF NOT EXISTS bot_state (key TEXT PRIMARY KEY, value TEXT, updated_at REAL NOT NULL)",
             # Add watched_chats table
             "CREATE TABLE IF NOT EXISTS watched_chats (chat_id TEXT PRIMARY KEY, mode TEXT NOT NULL DEFAULT 'full', added_by TEXT NOT NULL, added_at REAL NOT NULL)",
+            # Phase 3: report_chat_ids — JSON array of chat IDs for multi-chat reporting
+            "ALTER TABLE sessions ADD COLUMN report_chat_ids TEXT",
+            # Phase 3: last_heartbeat — worker heartbeat timestamp
+            "ALTER TABLE sessions ADD COLUMN last_heartbeat REAL",
         ]
         for stmt in migrations:
             try:
@@ -301,9 +309,11 @@ class Database:
         return dict(row) if row else None
 
     async def list_session_chat_ids(self) -> list[str]:
-        """Return all active session_chat_ids for polling."""
+        """Return session_chat_ids for active (non-completed/expired) sessions only."""
         cursor = await self._conn.execute(
-            "SELECT DISTINCT session_chat_id FROM sessions WHERE session_chat_id IS NOT NULL"
+            "SELECT DISTINCT session_chat_id FROM sessions "
+            "WHERE session_chat_id IS NOT NULL "
+            "AND status NOT IN ('completed', 'failed', 'expired')"
         )
         rows = await cursor.fetchall()
         return [r["session_chat_id"] for r in rows]

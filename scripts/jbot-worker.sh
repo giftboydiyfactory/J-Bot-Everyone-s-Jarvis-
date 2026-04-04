@@ -23,7 +23,7 @@ fi
 
 # Step 1: Create session + dedicated group chat (synchronous — fast)
 RESULT=$(PYTHONPATH="$REPO_DIR/src:${PYTHONPATH:-}" python3 -c "
-import sys, json, time, secrets
+import sys, json, time, secrets, os
 
 task_desc = sys.argv[1]
 user_email = sys.argv[2]
@@ -48,10 +48,12 @@ import sqlite3, pathlib
 db_path = pathlib.Path.home() / '.jbot' / 'jbot.db'
 now = time.time()
 conn = sqlite3.connect(str(db_path))
+conn.execute('PRAGMA busy_timeout = 10000')
+worker_model = os.environ.get('JBOT_WORKER_MODEL', 'opus')
 conn.execute(
     '''INSERT INTO sessions (id, chat_id, created_by, status, prompt, cwd, model, session_chat_id, created_at, updated_at)
-       VALUES (?, ?, ?, 'running', ?, ?, 'opus', ?, ?, ?)''',
-    (sid, manager_chat_id, user_email, task_desc, work_dir, session_chat_id, now, now),
+       VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?)''',
+    (sid, manager_chat_id, user_email, task_desc, work_dir, worker_model, session_chat_id, now, now),
 )
 conn.commit()
 conn.close()
@@ -86,6 +88,8 @@ TASK_FILE=$(mktemp /tmp/jbot-task-XXXXXX.txt)
 echo "$TASK_DESC" > "$TASK_FILE"
 
 # Step 3: Launch worker runner in background
+# Pass REPORT_CHAT_IDS env var through for multi-chat reporting (Phase 3)
+REPORT_CHAT_IDS="${REPORT_CHAT_IDS:-}" \
 nohup bash "$SCRIPT_DIR/jbot-worker-run.sh" \
     "$REPO_DIR" "$SESSION_ID" "$SESSION_CHAT_ID" "$MANAGER_CHAT_ID" \
     "$USER_EMAIL" "$WORK_DIR" "$TASK_FILE" \

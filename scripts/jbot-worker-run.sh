@@ -93,20 +93,33 @@ else
     CLAUDE_CMD="claude"
 fi
 
+# Phase 3: Update heartbeat before starting work
+python3 -c "
+import sqlite3, time, pathlib, sys
+db = sqlite3.connect(str(pathlib.Path.home() / '.jbot' / 'jbot.db'))
+db.execute('PRAGMA busy_timeout = 10000')
+db.execute('UPDATE sessions SET last_heartbeat=?, updated_at=? WHERE id=?',
+    (time.time(), time.time(), sys.argv[1]))
+db.commit()
+" "$SESSION_ID" 2>/dev/null || true
+
 echo "[$(date '+%H:%M:%S')] Running claude..."
 
 # Capture stdout (JSON) and stderr separately
 WORKER_STDOUT_FILE=$(mktemp /tmp/jbot-worker-XXXXXX.json)
+WORKER_MODEL=${JBOT_WORKER_MODEL:-opus}
+WORKER_PERM=${JBOT_PERM_MODE:-bypassPermissions}
 $CLAUDE_CMD -p "$TASK_DESC" \
-    --model opus \
+    --model "$WORKER_MODEL" \
     --output-format json \
-    --permission-mode bypassPermissions \
+    --permission-mode "$WORKER_PERM" \
     --name "jbot-${USER_EMAIL%%@*}-${SESSION_ID}" \
     --append-system-prompt "$WORKER_PROMPT" \
     --add-dir "$WORK_DIR" \
-    > "$WORKER_STDOUT_FILE" 2>/dev/null || true
+    > "$WORKER_STDOUT_FILE" 2>/dev/null
+CLAUDE_EXIT_CODE=$?
 
-echo "[$(date '+%H:%M:%S')] Claude exited."
+echo "[$(date '+%H:%M:%S')] Claude exited with code $CLAUDE_EXIT_CODE."
 
 # Extract result and session_id from claude JSON output (no eval — safe extraction)
 TMPDIR_PARSE=$(mktemp -d /tmp/jbot-parse-XXXXXX)
@@ -132,14 +145,23 @@ echo "[$(date '+%H:%M:%S')] Claude session: ${CLAUDE_SESSION_ID:-none}"
 # HTML-escape the result before embedding (prevents XSS from claude output)
 SAFE_RESULT=$(python3 -c "import html,sys; print(html.escape(sys.stdin.read()[:500]))" <<< "$WORKER_RESULT" 2>/dev/null || echo "$WORKER_RESULT")
 
+# Determine final status based on Claude exit code
+if [ "$CLAUDE_EXIT_CODE" -eq 0 ]; then
+    FINAL_STATUS="completed"
+else
+    FINAL_STATUS="failed"
+    WORKER_RESULT="[EXIT CODE $CLAUDE_EXIT_CODE] ${WORKER_RESULT}"
+fi
+
 # Update DB with result + claude session ID (enables --resume for follow-up)
 python3 -c "
 import sys, sqlite3, time, pathlib
 db = sqlite3.connect(str(pathlib.Path.home() / '.jbot' / 'jbot.db'))
+db.execute('PRAGMA busy_timeout = 10000')
 db.execute('UPDATE sessions SET status=?, last_output=?, claude_session=?, updated_at=? WHERE id=?',
     (sys.argv[1], sys.argv[2], sys.argv[3] or None, time.time(), sys.argv[4]))
 db.commit()
-" "completed" "$WORKER_RESULT" "$CLAUDE_SESSION_ID" "$SESSION_ID" 2>/dev/null || true
+" "$FINAL_STATUS" "$WORKER_RESULT" "$CLAUDE_SESSION_ID" "$SESSION_ID" 2>/dev/null || true
 
 # Send completion to dedicated session chat (via temp file for safety)
 COMPLETION_HTML=$(printf '<p><b>J-Bot [%s]</b> Task completed.</p><p>%s</p>' "$SESSION_ID" "$SAFE_RESULT")
@@ -148,5 +170,28 @@ $SEND "$SESSION_CHAT_ID" "$COMPLETION_HTML" 2>/dev/null || true
 # Send completion to manager chat (via temp file for safety)
 MGR_HTML=$(printf '<p><b>J-Bot</b> Task <code>%s</code> done.</p><p>%s</p>' "$SESSION_ID" "$SAFE_RESULT")
 $SEND "$MANAGER_CHAT_ID" "$MGR_HTML" 2>/dev/null || true
+
+# Phase 3: Report to additional chats if REPORT_CHAT_IDS is set (JSON array or comma-separated)
+if [ -n "${REPORT_CHAT_IDS:-}" ]; then
+    echo "[$(date '+%H:%M:%S')] Reporting to additional chats: $REPORT_CHAT_IDS"
+    # Parse JSON array or comma-separated list
+    EXTRA_CHATS=$(python3 -c "
+import sys, json
+raw = sys.argv[1]
+try:
+    ids = json.loads(raw)
+except (json.JSONDecodeError, TypeError):
+    ids = [s.strip() for s in raw.split(',') if s.strip()]
+for cid in ids:
+    print(cid)
+" "$REPORT_CHAT_IDS" 2>/dev/null || true)
+    while IFS= read -r EXTRA_CHAT_ID; do
+        if [ -n "$EXTRA_CHAT_ID" ] && [ "$EXTRA_CHAT_ID" != "$SESSION_CHAT_ID" ] && [ "$EXTRA_CHAT_ID" != "$MANAGER_CHAT_ID" ]; then
+            EXTRA_HTML=$(printf '<p><b>J-Bot</b> Task <code>%s</code> done.</p><p>%s</p>' "$SESSION_ID" "$SAFE_RESULT")
+            $SEND "$EXTRA_CHAT_ID" "$EXTRA_HTML" 2>/dev/null || true
+            echo "[$(date '+%H:%M:%S')] Reported to extra chat: ${EXTRA_CHAT_ID:0:20}..."
+        fi
+    done <<< "$EXTRA_CHATS"
+fi
 
 echo "[$(date '+%H:%M:%S')] Worker $SESSION_ID done."

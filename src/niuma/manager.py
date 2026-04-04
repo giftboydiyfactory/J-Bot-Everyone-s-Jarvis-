@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -198,11 +199,19 @@ class Manager:
     No JSON parsing needed — the Manager handles everything.
     """
 
+    # How long before we consider the Manager session potentially stale (seconds).
+    # If this threshold is exceeded without a successful process() call, the
+    # next process() will verify the session is still alive before resuming.
+    _WATCHDOG_INTERVAL: int = int(
+        __import__("os").environ.get("JBOT_MGR_WATCHDOG_INTERVAL", "3600")
+    )
+
     def __init__(self, config: ClaudeConfig, db: Optional["Database"] = None) -> None:
         self._config = config
         self._db = db
         self._session_id: Optional[str] = None
         self._initialized = False
+        self._last_success_ts: float = 0.0
 
     @property
     def session_id(self) -> Optional[str]:
@@ -217,9 +226,64 @@ class Manager:
             if saved:
                 self._session_id = saved
                 self._initialized = True
+                self._last_success_ts = time.time()
                 logger.info("Resumed Manager session from DB: %s", saved[:12])
         except Exception:
             logger.warning("Could not load manager session from DB", exc_info=True)
+
+    async def _check_session_health(self) -> bool:
+        """Verify the Manager session is still alive (watchdog).
+
+        Returns True if the session is healthy or no session exists yet.
+        If the session is expired/dead, clears it so a fresh one is created.
+        """
+        if not self._session_id:
+            return True  # No session to check -- will create fresh
+
+        # Only check if enough time has passed since last success
+        elapsed = time.time() - self._last_success_ts if self._last_success_ts else float("inf")
+        if elapsed < self._WATCHDOG_INTERVAL:
+            return True
+
+        logger.info("Watchdog: checking Manager session %s health", self._session_id[:12])
+
+        claude_cmd = _claude_command()
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *claude_cmd, "-p", "ping",
+                "--resume", self._session_id,
+                "--output-format", "json",
+                "--permission-mode", self._config.permission_mode,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=30)
+            error_msg = stderr_bytes.decode().strip()
+
+            if proc.returncode != 0 and "No conversation found" in error_msg:
+                logger.warning(
+                    "Watchdog: Manager session %s expired -- creating fresh session",
+                    self._session_id[:12],
+                )
+                self._session_id = None
+                self._initialized = False
+                if self._db is not None:
+                    try:
+                        await self._db.set_bot_state(_BOT_STATE_MANAGER_SESSION, "")
+                    except Exception:
+                        pass
+                return True  # Session cleared, process() will create new one
+
+            # Session is alive
+            self._last_success_ts = time.time()
+            logger.info("Watchdog: Manager session %s is healthy", self._session_id[:12])
+            return True
+        except asyncio.TimeoutError:
+            logger.warning("Watchdog: health check timed out -- assuming session is alive")
+            return True
+        except Exception:
+            logger.warning("Watchdog: health check failed", exc_info=True)
+            return True
 
     async def process(
         self,
@@ -236,6 +300,10 @@ class Manager:
         The chat_id is injected so Manager always knows where to reply.
         """
         prompt = self._build_prompt(user_message, user_email, chat_id, context)
+
+        # Watchdog: verify session is alive before resuming (Phase 2)
+        if self._config.persistent_manager and not _is_retry:
+            await self._check_session_health()
 
         claude_cmd = _claude_command()
 
@@ -328,6 +396,9 @@ class Manager:
                     await self._db.set_bot_state(_BOT_STATE_MANAGER_SESSION, new_sid)
                 except Exception:
                     logger.warning("Failed to persist manager session_id to DB", exc_info=True)
+
+        # Watchdog: record successful interaction timestamp
+        self._last_success_ts = time.time()
 
     async def feed_worker_result(
         self,

@@ -35,6 +35,7 @@ class ClaudeConfig:
     session_timeout: int
     permission_mode: str
     default_cwd: str
+    persistent_manager: bool
 
 
 @dataclass(frozen=True)
@@ -131,6 +132,7 @@ def load_config(path: Path) -> NiumaConfig:
             session_timeout=session_timeout,
             permission_mode=claude_raw.get("permission_mode", "auto"),
             default_cwd=_expand_path(claude_raw.get("default_cwd", "~")),
+            persistent_manager=claude_raw.get("persistent_manager", True),
         ),
         security=SecurityConfig(
             allowed_users=_require(security_raw, "allowed_users", "security"),

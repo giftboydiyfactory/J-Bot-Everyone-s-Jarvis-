@@ -21,6 +21,7 @@ from niuma.poller import Poller, TeamsMessage
 from niuma.teams_api import create_session_chat_async as create_session_chat
 from niuma.responder import Responder
 from niuma.session import SessionManager
+from niuma.utils import is_bot_message
 
 # TODO (multi-manager): Add config option for per-directory managers,
 # e.g. config.claude.per_dir_managers: {"/home/user/project": "manager_session_id"}.
@@ -499,8 +500,8 @@ class NiumaBot:
             if not self._is_allowed(msg.sender_email):
                 continue
 
-            # Skip bot's own messages
-            if "Sent by J-Bot" in msg.body_raw or "ai-pim-utils" in msg.body_raw or "Sent by niuma" in msg.body_raw or "【🤖J-Bot】" in msg.body:
+            # Skip bot's own messages (unified detection from utils.py)
+            if is_bot_message(msg.body_raw, msg.body):
                 continue
 
             prompt = msg.body.strip()
@@ -553,7 +554,8 @@ class NiumaBot:
         for msg in new_messages:
             if not self._is_allowed(msg.sender_email):
                 continue
-            if "Sent by J-Bot" in msg.body_raw or "ai-pim-utils" in msg.body_raw or "Sent by niuma" in msg.body_raw or "【🤖J-Bot】" in msg.body:
+            # Skip bot's own messages (unified detection from utils.py)
+            if is_bot_message(msg.body_raw, msg.body):
                 continue
             prompt = msg.body.strip()
 
@@ -658,15 +660,23 @@ def cli_entry() -> None:
 
 
 def _daemonize() -> None:
-    """Simple double-fork daemonization."""
+    """Simple double-fork daemonization.
+
+    Redirects stderr to ~/.jbot/daemon.log instead of /dev/null so that
+    uncaught exceptions and early startup errors are captured.
+    """
     if os.fork() > 0:
         sys.exit(0)
     os.setsid()
     if os.fork() > 0:
         sys.exit(0)
+
+    daemon_log = Path.home() / ".jbot" / "daemon.log"
+    daemon_log.parent.mkdir(parents=True, exist_ok=True)
+
     sys.stdin.close()
     sys.stdout.close()
     sys.stderr.close()
     sys.stdin = open(os.devnull, "r")
     sys.stdout = open(os.devnull, "w")
-    sys.stderr = open(os.devnull, "w")
+    sys.stderr = open(str(daemon_log), "a")
