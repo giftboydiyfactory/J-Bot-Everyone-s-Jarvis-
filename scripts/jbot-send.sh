@@ -20,7 +20,7 @@ if [ -f "$VENV/bin/activate" ]; then
 fi
 
 # Use Graph API directly — auto-append footer, strip insight blocks
-PYTHONPATH="$REPO_DIR/src:${PYTHONPATH:-}" python3 -c "
+PYTHONPATH="$REPO_DIR/src:${PYTHONPATH:-}" /bin/python3.9 -c "
 import sys, re
 from niuma.teams_api import send_chat_message_sync
 

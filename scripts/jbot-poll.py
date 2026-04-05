@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/bin/python3.9
 """Poll Teams chats via Graph API with auto token refresh.
 
 Replaces teams-cli for polling — no interactive auth needed.

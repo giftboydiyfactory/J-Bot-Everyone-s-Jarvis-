@@ -433,10 +433,11 @@ def create_calendar_event_sync(
 
 def _graph_get_sync(endpoint: str, params: Optional[dict[str, str]] = None) -> dict[str, Any]:
     """Make a GET request to Microsoft Graph API (synchronous)."""
+    import urllib.parse
+
     token = _get_access_token()
     url = f"https://graph.microsoft.com/v1.0{endpoint}"
     if params:
-        import urllib.parse
         url += "?" + urllib.parse.urlencode(params)
 
     req = urllib.request.Request(url)

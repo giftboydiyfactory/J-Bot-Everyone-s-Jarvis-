@@ -258,6 +258,8 @@ class NiumaBot:
             logger.warning("Session cleanup failed", exc_info=True)
 
         import time as _time
+        _last_disk_check = 0.0
+        _DISK_CHECK_INTERVAL = 600  # every 10 minutes
         while self._running:
             try:
                 # Hard timeout on poll cycle to prevent network hangs from freezing the loop
@@ -290,6 +292,16 @@ class NiumaBot:
                 logger.exception("Error in poll cycle")
                 self._consecutive_failures += 1
                 self._check_alert()
+            # Periodic disk usage check (prevents the recurring disk-full → token-death issue)
+            now = _time.time()
+            if now - _last_disk_check > _DISK_CHECK_INTERVAL:
+                _last_disk_check = now
+                try:
+                    from niuma.utils import check_home_disk
+                    check_home_disk()
+                except Exception:
+                    logger.debug("Disk check failed", exc_info=True)
+
             await asyncio.sleep(self._poll_interval)
 
     async def _check_config_reload(self) -> None:

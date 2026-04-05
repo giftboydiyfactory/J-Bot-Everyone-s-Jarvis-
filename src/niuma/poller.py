@@ -164,7 +164,7 @@ class Poller:
 def _extract_image_urls(body_html: str) -> list[str]:
     """Extract Graph API hosted content image URLs from Teams message HTML.
 
-    Teams inline images use: <img src="https://graph.microsoft.com/.../hostedContents/.../\$value" .../>
+    Teams inline images use: <img src="https://graph.microsoft.com/.../hostedContents/.../$value" .../>
     """
     return re.findall(
         r'<img\s+[^>]*src="(https://graph\.microsoft\.com/[^"]*hostedContents[^"]*)"',
