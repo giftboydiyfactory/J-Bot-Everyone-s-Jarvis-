@@ -617,6 +617,9 @@ def _setup_logging(config: NiumaConfig) -> None:
             logging.StreamHandler(),
         ],
     )
+    # Suppress noisy third-party loggers (aiosqlite alone generated 1.5M lines at DEBUG)
+    for noisy in ("aiosqlite", "urllib3", "httpcore", "httpx"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def cli_entry() -> None:

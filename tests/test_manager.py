@@ -90,6 +90,7 @@ async def test_manager_persists_session_id(db: Database) -> None:
         session_timeout=86400,
         permission_mode="auto",
         default_cwd="/tmp",
+        persistent_manager=True,
     )
     manager = Manager(cfg, db=db)
 
@@ -129,6 +130,7 @@ async def test_manager_loads_state_from_db(db: Database) -> None:
         session_timeout=86400,
         permission_mode="auto",
         default_cwd="/tmp",
+        persistent_manager=True,
     )
     manager = Manager(cfg, db=db)
     assert manager.session_id is None  # not yet loaded
@@ -149,6 +151,7 @@ async def test_feed_worker_result_catches_errors() -> None:
         session_timeout=86400,
         permission_mode="auto",
         default_cwd="/tmp",
+        persistent_manager=True,
     )
     manager = Manager(cfg, db=None)
 

@@ -13,81 +13,51 @@ from niuma.main import NiumaBot
 @pytest.fixture
 async def bot(config_file: Path) -> NiumaBot:
     config = load_config(config_file)
-    bot = NiumaBot(config)
-    await bot.init()
+    # Mock Graph API calls during init (_detect_owner, manager.load_state)
+    with patch("niuma.main.asyncio.to_thread", return_value={"mail": "testbot@nvidia.com", "displayName": "TestBot"}):
+        bot = NiumaBot(config)
+        await bot.init()
     yield bot
     await bot.shutdown()
 
 
-def _teams_read_output(messages: list[dict]) -> bytes:
-    return json.dumps({
-        "success": True,
-        "data": {"messages": messages},
-        "metadata": {},
-    }).encode()
-
-
-def _claude_manager_output(result: str = "") -> bytes:
-    return json.dumps({
-        "result": result,
-        "session_id": "manager-uuid",
-        "total_cost_usd": 0.01,
-    }).encode()
-
-
-def _claude_worker_output(result: str) -> bytes:
-    return json.dumps({
-        "result": result,
-        "session_id": "worker-uuid-123",
-        "total_cost_usd": 0.05,
-    }).encode()
-
-
 @pytest.mark.asyncio
 async def test_full_flow_new_session(bot: NiumaBot) -> None:
-    """User sends @niuma message -> dispatcher routes new -> worker completes -> reply sent."""
-    teams_read_mock = AsyncMock()
-    teams_read_mock.communicate = AsyncMock(return_value=(
-        _teams_read_output([{
+    """User sends @jbot message -> Manager.process() is called with correct args."""
+    graph_messages = [
+        {
             "id": "1742385601000",
             "from": {"user": {"displayName": "Jack", "email": "testuser@nvidia.com"}},
             "body": {"content": "@jbot analyze this repo"},
             "createdDateTime": "2026-03-19T10:00:00Z",
-        }]),
-        b"",
-    ))
-    teams_read_mock.returncode = 0
-
-    manager_mock = AsyncMock()
-    manager_mock.communicate = AsyncMock(return_value=(
-        _claude_manager_output("Analyzed the repo. Found 2 performance issues."),
-        b"",
-    ))
-    manager_mock.returncode = 0
-
-    teams_send_mock = AsyncMock()
-    teams_send_mock.communicate = AsyncMock(return_value=(b'{"success":true}', b""))
-    teams_send_mock.returncode = 0
-
-    async def mock_subprocess(*args, **kwargs):
-        cmd = args[0] if args else ""
-        if cmd == "teams-cli":
-            if "read" in args:
-                return teams_read_mock
-            else:
-                return teams_send_mock
-        elif cmd == "claude":
-            return manager_mock
-        return teams_read_mock
+        }
+    ]
 
     # Pre-seed the poll state so the bot treats the message as new.
-    # Issue 2 fix: first-time polls (no poll_state) skip all existing messages,
-    # so we simulate that a prior poll recorded an older numeric message ID.
     chat_id = bot._config.teams.chat_ids[0]
     await bot._db.set_poll_state(chat_id, "1742385600000")
 
-    with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess):
+    # Mock Graph API polling, Manager.process(), and Responder.send()
+    with patch(
+        "niuma.poller._graph_get_messages_sync", return_value=graph_messages
+    ) as poll_mock, patch.object(
+        bot._manager, "process", new_callable=AsyncMock
+    ) as manager_mock, patch.object(
+        bot._responder, "send", new_callable=AsyncMock
+    ) as send_mock:
         await bot.poll_once()
-        await asyncio.sleep(0.2)
+        # Allow fire-and-forget tasks to complete
+        await asyncio.sleep(0.3)
 
-    assert teams_send_mock.communicate.call_count >= 1
+    # Verify Graph API was polled
+    poll_mock.assert_called()
+
+    # Verify acknowledgment was sent
+    assert send_mock.call_count >= 1
+
+    # Verify Manager.process() was called with the user's message
+    assert manager_mock.call_count >= 1
+    call_kwargs = manager_mock.call_args
+    assert "analyze this repo" in call_kwargs.kwargs.get("user_message", "")
+    assert call_kwargs.kwargs.get("user_email") == "testuser@nvidia.com"
+    assert call_kwargs.kwargs.get("chat_id") == chat_id

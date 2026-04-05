@@ -36,6 +36,7 @@ def sample_config(tmp_dir: Path) -> dict[str, Any]:
             "session_timeout": 86400,
             "permission_mode": "auto",
             "default_cwd": str(tmp_dir),
+            "persistent_manager": True,
         },
         "security": {
             "allowed_users": ["testuser@nvidia.com"],

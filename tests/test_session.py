@@ -30,6 +30,7 @@ def session_mgr(db: Database, sample_config: dict) -> SessionManager:
         session_timeout=10,
         permission_mode="auto",
         default_cwd="/tmp",
+        persistent_manager=True,
     )
     return SessionManager(claude_cfg, db)
 

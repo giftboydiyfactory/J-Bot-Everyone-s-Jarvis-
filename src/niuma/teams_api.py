@@ -425,3 +425,162 @@ def create_calendar_event_sync(
     result = _graph_post_sync("/me/events", event)
     logger.info("Calendar event created: %s (id: %s)", subject, result.get("id", "?")[:20])
     return result
+
+
+# ---------------------------------------------------------------------------
+# READ operations — Graph API GET requests (no CLI dependency)
+# ---------------------------------------------------------------------------
+
+def _graph_get_sync(endpoint: str, params: Optional[dict[str, str]] = None) -> dict[str, Any]:
+    """Make a GET request to Microsoft Graph API (synchronous)."""
+    token = _get_access_token()
+    url = f"https://graph.microsoft.com/v1.0{endpoint}"
+    if params:
+        import urllib.parse
+        url += "?" + urllib.parse.urlencode(params)
+
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("Accept", "application/json")
+
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()[:500]
+        logger.error("Graph API GET error %d: %s", e.code, error_body)
+        raise RuntimeError(f"Graph API error {e.code}: {error_body}")
+
+
+def list_chats_sync(*, limit: int = 25) -> list[dict[str, Any]]:
+    """List user's Teams chats via Graph API.
+
+    Requires Chat.ReadWrite scope.
+    Returns list of chat objects with id, topic, chatType, members.
+    """
+    data = _graph_get_sync("/me/chats", {
+        "$top": str(limit),
+        "$expand": "members",
+        "$orderby": "lastMessagePreview/createdDateTime desc",
+    })
+    return data.get("value", [])
+
+
+async def list_chats_async(*, limit: int = 25) -> list[dict[str, Any]]:
+    """Async wrapper for list_chats_sync."""
+    return await asyncio.to_thread(list_chats_sync, limit=limit)
+
+
+def read_chat_messages_sync(
+    *, chat_id: str, limit: int = 10
+) -> list[dict[str, Any]]:
+    """Read recent messages from a Teams chat via Graph API.
+
+    Requires Chat.ReadWrite + ChannelMessage.Read.All scope.
+    Returns list of message objects.
+    """
+    data = _graph_get_sync(f"/chats/{chat_id}/messages", {
+        "$top": str(limit),
+        "$orderby": "createdDateTime desc",
+    })
+    return data.get("value", [])
+
+
+async def read_chat_messages_async(
+    *, chat_id: str, limit: int = 10
+) -> list[dict[str, Any]]:
+    """Async wrapper for read_chat_messages_sync."""
+    return await asyncio.to_thread(
+        read_chat_messages_sync, chat_id=chat_id, limit=limit,
+    )
+
+
+def read_emails_sync(
+    *,
+    folder: str = "inbox",
+    limit: int = 10,
+    unread_only: bool = False,
+    search: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    """Read emails from a mail folder via Graph API.
+
+    Requires Mail.ReadWrite scope.
+    folder: 'inbox', 'sentitems', 'drafts', or folder ID.
+    Returns list of message objects.
+    """
+    params: dict[str, str] = {
+        "$top": str(limit),
+        "$orderby": "receivedDateTime desc",
+        "$select": "id,subject,from,receivedDateTime,isRead,bodyPreview,importance",
+    }
+    if unread_only:
+        params["$filter"] = "isRead eq false"
+    if search:
+        params["$search"] = f'"{search}"'
+
+    data = _graph_get_sync(f"/me/mailFolders/{folder}/messages", params)
+    return data.get("value", [])
+
+
+async def read_emails_async(
+    *,
+    folder: str = "inbox",
+    limit: int = 10,
+    unread_only: bool = False,
+    search: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    """Async wrapper for read_emails_sync."""
+    return await asyncio.to_thread(
+        read_emails_sync,
+        folder=folder, limit=limit, unread_only=unread_only, search=search,
+    )
+
+
+def read_email_body_sync(*, message_id: str) -> dict[str, Any]:
+    """Read full email body by message ID via Graph API.
+
+    Returns message object with full body content.
+    """
+    data = _graph_get_sync(f"/me/messages/{message_id}", {
+        "$select": "id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,importance,hasAttachments",
+    })
+    return data
+
+
+async def read_email_body_async(*, message_id: str) -> dict[str, Any]:
+    """Async wrapper for read_email_body_sync."""
+    return await asyncio.to_thread(read_email_body_sync, message_id=message_id)
+
+
+def read_calendar_sync(
+    *,
+    start: str,
+    end: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Read calendar events in a time range via Graph API.
+
+    Requires Calendars.Read or Calendars.ReadWrite scope.
+    start/end format: ISO 8601, e.g. "2026-04-05T00:00:00Z"
+    Returns list of event objects.
+    """
+    data = _graph_get_sync("/me/calendarView", {
+        "startDateTime": start,
+        "endDateTime": end,
+        "$top": str(limit),
+        "$orderby": "start/dateTime",
+        "$select": "id,subject,start,end,location,organizer,attendees,isOnlineMeeting,onlineMeetingUrl,bodyPreview",
+    })
+    return data.get("value", [])
+
+
+async def read_calendar_async(
+    *,
+    start: str,
+    end: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Async wrapper for read_calendar_sync."""
+    return await asyncio.to_thread(
+        read_calendar_sync, start=start, end=end, limit=limit,
+    )
